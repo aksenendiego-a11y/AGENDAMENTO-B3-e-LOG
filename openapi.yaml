@@ -1,0 +1,237 @@
+openapi: 3.0.3
+info:
+  title: SAD Logística API
+  version: 1.0.0
+  description: API de agendamento de descarga. Datas da agenda usam o fuso IANA configurado; startsAt/endsAt são instantes ISO 8601.
+servers:
+  - url: http://127.0.0.1:3100/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      responses: {'200': {description: API disponível}}
+  /auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, format: password}
+      responses: {'200': {description: Token bearer e usuário}, '401': {description: Credenciais inválidas}, '429': {description: Tentativas limitadas}}
+  /availability:
+    get:
+      parameters:
+        - {name: from, in: query, required: true, schema: {type: string, format: date}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        '200':
+          description: Slots e resumo diário de capacidade. Consulte até 42 datas ISO por chamada; reservas listadas são limitadas ao escopo da sessão.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: {type: boolean}
+                  slots: {type: array, items: {type: object}}
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: {type: string, format: date}
+                        timezone: {type: string, nullable: true}
+                        status: {type: string, enum: [no-schedule, no-service, closed, available, partial, full]}
+                        capacity: {type: integer}
+                        occupied: {type: integer}
+                        remaining: {type: integer}
+                        bookingCount: {type: integer, description: Contagem visível ao usuário autenticado}
+                        slots: {type: array, items: {type: object}}
+                        bookings: {type: array, items: {type: object}, description: Reservas confirmadas visíveis ao usuário autenticado}
+        '401': {description: Não autenticado}
+  /admin/calendar/configs:
+    get:
+      responses: {'200': {description: Configurações versionadas}, '403': {description: Requer administrador}}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone, effectiveFrom, weeklyRules]
+              properties:
+                timezone: {type: string, example: America/Sao_Paulo}
+                effectiveFrom: {type: string, format: date}
+                weeklyRules:
+                  type: array
+                  items:
+                    type: object
+                    required: [weekday, windows]
+                    properties:
+                      weekday: {type: integer, minimum: 1, maximum: 7, description: ISO weekday}
+                      windows:
+                        type: array
+                        items:
+                          type: object
+                          required: [start, end, durationMinutes, capacity]
+                          properties:
+                            start: {type: string, example: '08:00'}
+                            end: {type: string, example: '12:00'}
+                            durationMinutes: {type: integer, minimum: 1}
+                            capacity: {type: integer, minimum: 1}
+      responses: {'201': {description: Configuração criada}, '400': {description: Configuração inválida}, '409': {description: Conflito com agenda ou reservas}}
+  /admin/calendar/exceptions:
+    get:
+      responses: {'200': {description: Exceções da agenda}}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [localDate, blocked]
+              properties:
+                localDate: {type: string, format: date}
+                blocked: {type: boolean}
+                windows: {type: array, items: {type: object}}
+      responses: {'201': {description: Exceção criada}}
+  /bookings:
+    get:
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: protocol, in: query, schema: {type: string}}
+        - {name: plate, in: query, schema: {type: string}}
+        - {name: companyId, in: query, schema: {type: string, format: uuid}}
+        - {name: status, in: query, schema: {type: string}}
+      responses: {'200': {description: Reservas paginadas e limitadas por empresa; administrador pode filtrar}}
+    post:
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: UUID para repetir com segurança a mesma tentativa de criação.
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slotId, truckId, driverId, weight, weightUnit, invoiceNumber]
+              properties:
+                slotId: {type: string, format: uuid}
+                truckId: {type: string, format: uuid}
+                driverId: {type: string, format: uuid}
+                weight: {type: number, exclusiveMinimum: 0}
+                weightUnit: {type: string}
+                invoiceNumber: {type: string}
+      responses: {'201': {description: Reserva criada com protocolo}, '409': {description: Capacidade esgotada ou faixa obsoleta}}
+  /bookings/{id}:
+    get:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Reserva e histórico}, '404': {description: Não encontrada neste escopo}}
+  /bookings/{id}/cancel:
+    post:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Reserva cancelada}, '409': {description: Transição de status inválida}}
+  /bookings/{id}/reschedule:
+    post:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [slotId], properties: {slotId: {type: string, format: uuid}}}
+      responses: {'200': {description: Reserva reagendada com histórico}, '409': {description: Capacidade esgotada ou faixa inválida}}
+  /bookings/{id}/documents:
+    post:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [documentType, file]
+              properties:
+                documentType: {type: string, enum: [xml, pdf]}
+                file: {type: string, format: binary}
+      responses: {'201': {description: Metadados do documento privado}, '400': {description: Conteúdo inválido}, '413': {description: Arquivo acima do limite}}
+  /bookings/{bookingId}/documents/{documentId}:
+    delete:
+      parameters:
+        - {name: bookingId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses: {'204': {description: Documento removido do acesso e auditoria registrada}, '404': {description: Documento não encontrado neste escopo}}
+  /documents/{id}/download:
+    get:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Download autenticado e autorizado}, '404': {description: Documento não encontrado neste escopo}}
+  /company/trucks:
+    get:
+      responses: {'200': {description: Caminhões da empresa autenticada}}
+    post:
+      responses: {'201': {description: Caminhão cadastrado}}
+  /company/drivers:
+    get:
+      responses: {'200': {description: Motoristas da empresa autenticada}}
+    post:
+      responses: {'201': {description: Motorista cadastrado}}
+  /admin/companies:
+    get:
+      responses: {'200': {description: Empresas}}
+    post:
+      responses: {'201': {description: Empresa cadastrada}}
+  /admin/companies/{id}:
+    patch:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Empresa atualizada}}
+  /admin/users:
+    get:
+      responses: {'200': {description: Usuários de empresa}}
+    post:
+      responses: {'201': {description: Usuário de empresa cadastrado}}
+  /admin/users/{id}:
+    patch:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Usuário ativado ou desativado}}
+  /admin/slots:
+    post:
+      responses: {'201': {description: Faixa manual cadastrada}}
+  /admin/slots/{id}:
+    patch:
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+      responses: {'200': {description: Capacidade ou bloqueio atualizado}, '409': {description: Capacidade menor que ocupação}}
+  /admin/audit:
+    get:
+      responses: {'200': {description: Eventos administrativos e de reserva}}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: HMAC-SHA256 signed token
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
