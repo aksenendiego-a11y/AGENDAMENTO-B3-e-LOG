@@ -78,8 +78,24 @@ test.afterAll(async () => {
 
 test('admin configures the calendar and a company books, reschedules, downloads and cancels', async ({ page }) => {
   const bookingDay = DateTime.fromISO(scheduleDate, { zone: 'America/Sao_Paulo' });
+  const browserErrors: string[] = [];
+  page.on('console', message => { if (message.type() === 'error') browserErrors.push(message.text()); });
+  page.on('pageerror', error => browserErrors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await login(page, adminEmail, adminPassword);
+  await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  for (const width of [768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const navigateAdmin = async (label: string) => {
+    await page.getByRole('button', { name: 'Abrir menu' }).click();
+    await page.locator('.admin-sidebar').getByRole('button', { name: label, exact: true }).click();
+  };
+  await navigateAdmin('Configurações da agenda');
   await expect(page.getByRole('heading', { name: 'Configuração da agenda' })).toBeVisible();
 
   await page.getByLabel('Fuso horário IANA').fill('America/Sao_Paulo');
@@ -100,7 +116,15 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await page.getByRole('button', { name: 'Publicar configuração' }).click();
   await expect(page.getByRole('status')).toContainText('Configuração de calendário publicada');
 
-  await page.getByRole('button', { name: 'Empresas e usuários' }).click();
+  await navigateAdmin('Bloqueios e Exceções');
+  await expect(page.getByRole('heading', { name: 'Bloqueios e exceções' })).toBeVisible();
+  await navigateAdmin('Agendamentos');
+  await expect(page.getByRole('heading', { name: 'Agendamentos', exact: true })).toBeVisible();
+  await navigateAdmin('Notas Fiscais');
+  await expect(page.getByRole('heading', { name: 'Upload de nota fiscal' })).toBeVisible();
+  await navigateAdmin('Auditoria');
+  await expect(page.getByRole('heading', { name: 'Auditoria', exact: true })).toBeVisible();
+  await navigateAdmin('Empresas e Usuários');
   const companyForm = page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Cadastrar empresa' }) }).locator('form');
   await companyForm.getByLabel('Nome da empresa').fill(companyName);
   await companyForm.getByLabel('E-mail do usuário (opcional)').fill(companyEmail);
@@ -110,7 +134,9 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await page.getByRole('button', { name: 'Sair' }).click();
 
   await login(page, companyEmail, companyPassword);
-  await page.getByRole('button', { name: 'Frota e motoristas' }).click();
+  await expect(page.getByRole('button', { name: 'Novo agendamento' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('.mobile-bottom-nav').getByRole('button', { name: 'Cadastro', exact: true }).click();
   const plate = `EET${Math.floor(Math.random() * 10)}A23`;
   const truckForm = page.locator('.two-col .panel').first().locator('form');
   await truckForm.getByLabel('Placa').fill(plate);
@@ -121,27 +147,29 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await driverForm.getByLabel('Telefone').fill('11999990001');
   await driverForm.getByRole('button', { name: 'Cadastrar' }).click();
 
-  await page.getByRole('button', { name: 'Agendar descarga' }).click();
-  await page.getByLabel('De').fill(scheduleDate);
-  await page.getByLabel('Até').fill(scheduleDate);
+  await page.locator('.mobile-bottom-nav').getByRole('button', { name: 'Agendamento', exact: true }).click();
+  await page.getByLabel('De', { exact: true }).fill(scheduleDate);
+  await page.getByLabel('Até', { exact: true }).fill(scheduleDate);
   await page.getByRole('button', { name: 'Consultar horários' }).click();
   await expect(page.locator('.slot-card.status-available').first()).toBeVisible();
   await page.locator('.slot-card.status-available').first().click();
   await page.getByLabel('Caminhão').selectOption({ label: plate });
   await page.getByLabel('Motorista').selectOption({ label: 'Motorista E2E sintético' });
-  await page.getByLabel('Peso').fill('12500');
-  await page.getByLabel('Unidade').selectOption('kg');
+  await page.getByRole('button', { name: 'Próximo', exact: true }).click();
   await page.getByLabel('Número da nota fiscal').fill('E2E-SYNTHETIC-01');
+  await page.getByRole('button', { name: 'Próximo', exact: true }).click();
   await page.getByLabel('Arquivo XML').setInputFiles({ name: 'synthetic-invoice.xml', mimeType: 'application/xml', buffer: Buffer.from('<?xml version="1.0"?><Invoice><Number>SYNTHETIC-E2E</Number></Invoice>') });
   await page.getByLabel('Arquivo PDF').setInputFiles({ name: 'synthetic-invoice.pdf', mimeType: 'application/pdf', buffer: makeValidPdf() });
+  await expect(page.locator('[data-booking-stage="4"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirmar agendamento' })).toBeVisible();
   const bookingResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/bookings') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Confirmar agendamento' }).click();
+  await page.locator('.booking-stage-actions button[formnovalidate]').click();
   const booked = await bookingResponse;
   expect(booked.status(), await booked.text()).toBe(201);
   await expect(page.locator('.alert-success')).toContainText('Protocolo SAD-');
 
-  await page.getByRole('button', { name: 'Meus agendamentos' }).click();
-  await expect(page.getByRole('heading', { name: 'Calendário mensal' })).toBeVisible();
+  await page.locator('.mobile-bottom-nav').getByRole('button', { name: 'Meus agendamentos' }).click();
+  await expect(page.getByRole('heading', { name: 'Calendário de Disponibilidade' })).toBeVisible();
   const targetMonth = DateTime.fromISO(scheduleDate, { zone: 'America/Sao_Paulo' }).startOf('month');
   let visibleMonth = DateTime.now().setZone('America/Sao_Paulo').startOf('month');
   while (visibleMonth < targetMonth) { await page.getByRole('button', { name: 'Próximo mês' }).click(); visibleMonth = visibleMonth.plus({ months: 1 }); }
@@ -154,8 +182,8 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await expect(page.getByText(/SAD-\d{4}-/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Reagendar' }).click();
   const rebooking = page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Escolher novo horário' }) });
-  await rebooking.getByLabel('De').fill(scheduleDate);
-  await rebooking.getByLabel('Até').fill(scheduleDate);
+  await rebooking.getByLabel('De', { exact: true }).fill(scheduleDate);
+  await rebooking.getByLabel('Até', { exact: true }).fill(scheduleDate);
   const rescheduleAvailability = page.waitForResponse(response => response.url().includes('/api/v1/availability?') && response.request().method() === 'GET');
   await rebooking.getByRole('button', { name: 'Consultar' }).click();
   const slots = await (await rescheduleAvailability).json() as { configured: boolean; slots: Array<{ id: string; status: string; startsAt: string; capacity: number; occupied: number }> };
@@ -173,4 +201,12 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Cancelar' }).click();
   await expect(page.getByText('Cancelado').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir menu' }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Notas fiscais', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Notas fiscais', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Abrir menu' }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Enviar documentos', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Upload de nota fiscal' })).toBeVisible();
+  expect(browserErrors).toEqual([]);
 });

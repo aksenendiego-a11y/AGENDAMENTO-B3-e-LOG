@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { AdminLayout } from './admin/layouts/AdminLayout';
+import { SADIcon } from './components/SADIcon';
 
 type User = { id: string; email: string; role: 'admin' | 'company' };
 type Slot = { id: string; startsAt: string; endsAt: string; timezone: string | null; localDate?: string; capacity: number; occupied: number; remaining?: number; status: string };
@@ -195,18 +196,21 @@ export function App() {
   // Menu completo para Admin e para Empresa com navegação idêntica à funcionalidade original
   const navigation: Array<[string, string, string]> = user?.role === 'admin'
     ? [
-        ['home', 'Início', '⌂'],
-        ['bookings', 'Agendamentos', '▦'],
-        ['agenda', 'Configurações da agenda', '⚙'],
-        ['exceptions', 'Bloqueios e Exceções', '⊘'],
-        ['companies', 'Empresas e Usuários', '♙'],
-        ['upload', 'Notas Fiscais', String.fromCharCode(0x25a4)],
-        ['audit', 'Auditoria', '▤']
+        ['home', 'Início', 'home'],
+        ['bookings', 'Agendamentos', 'bookings'],
+        ['agenda', 'Configurações da agenda', 'agenda'],
+        ['exceptions', 'Bloqueios e Exceções', 'exceptions'],
+        ['companies', 'Empresas e Usuários', 'companies'],
+        ['upload', 'Notas Fiscais', 'upload'],
+        ['audit', 'Auditoria', 'audit']
       ]
     : [
-        ['home', 'Início', '⌂'],
-        ['agenda', 'Agendamento', '▦'],
-        ['cadastro', 'Cadastro', '▣']
+        ['home', 'Início', 'home'],
+        ['agenda', 'Agendamento', 'agenda'],
+        ['cadastro', 'Cadastro', 'cadastro'],
+        ['bookings', 'Meus agendamentos', 'bookings'],
+        ['invoices', 'Notas fiscais', 'invoices'],
+        ['upload', 'Enviar documentos', 'upload']
       ];
 
   if (!user) return <Login onLogin={login} onRegister={register} error={error} />;
@@ -258,7 +262,7 @@ export function App() {
             <p className="nav-label">MENU PRINCIPAL</p>
             {navigation.map(([key, label, icon]) => (
               <button key={key} className={`nav-item ${section === key ? 'active' : ''}`} aria-current={section === key ? 'page' : undefined} onClick={() => { setSection(key); setMobileMenuOpen(false); }}>
-                <span className="nav-icon">{icon}</span>
+                <span className="nav-icon"><SADIcon name={icon} /></span>
                 <span className="nav-label-text">{label}</span>
               </button>
             ))}
@@ -280,7 +284,7 @@ export function App() {
         {/* Conteúdo Principal */}
         <button className="mobile-menu-backdrop" aria-label="Fechar menu" onClick={() => setMobileMenuOpen(false)} />
         <nav className="mobile-bottom-nav" aria-label="Navegação rápida">
-          {navigation.slice(0, 4).map(([key, label, icon]) => <button key={key} className={section === key ? 'active' : ''} aria-current={section === key ? 'page' : undefined} onClick={() => setSection(key)}><span aria-hidden="true">{icon}</span><small>{key === 'home' ? 'Início' : key === 'agenda' ? 'Agendamento' : key === 'cadastro' ? 'Cadastro' : key === 'trucks' ? 'Frota' : key === 'exceptions' ? 'Bloqueios' : label}</small></button>)}
+          {navigation.slice(0, 4).map(([key, label, icon]) => <button key={key} className={section === key ? 'active' : ''} aria-current={section === key ? 'page' : undefined} onClick={() => { setSection(key); setMobileMenuOpen(false); }}><span><SADIcon name={icon} /></span><small>{key === 'home' ? 'Início' : key === 'agenda' ? 'Agendamento' : key === 'cadastro' ? 'Cadastro' : key === 'trucks' ? 'Frota' : key === 'exceptions' ? 'Bloqueios' : label}</small></button>)}
         </nav>
         <main className="content">
           {error && <div className="alert alert-error" role="alert">{error}<button onClick={() => setError('')} aria-label="Fechar">×</button></div>}
@@ -394,7 +398,7 @@ function Panel({ title, children, className = '' }: { title?: string; children: 
 function MetricCard({ icon, label, value, note }: { icon: string; label: string; value: string; note: string }) {
   return (
     <div className="metric-card">
-      <span className="metric-icon yellow-box">{icon}</span>
+      <span className="metric-icon yellow-box"><SADIcon name={icon} size={20} /></span>
       <div className="metric-data">
         <p className="metric-label">{label}</p>
         <strong className="metric-value">{value}</strong>
@@ -455,7 +459,7 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
     try {
       const availability = await api<Availability>(`/api/v1/availability?from=${start}&to=${end}`);
       setSlotsData(availability);
-      setSelected('');
+      setSelected(current => availability.slots.some(slot => slot.id === current && (slot.status === 'available' || slot.status === 'partial')) ? current : '');
       const selectedHasFutureSlots = availability.days
         .find(day => day.date === selectedDate)?.slots
         .some(slot => slot.status !== 'blocked' && slot.status !== 'full' && new Date(slot.startsAt).getTime() > Date.now());
@@ -579,8 +583,8 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
               <button className="text-link" onClick={() => onNavigate('cadastro')}>Gerenciar cadastros →</button>
             </Panel>
             <Panel title="Agendamentos">
-              <p className="muted">Confira as datas liberadas para descarga e consulte os horarios disponíveis.</p>
-              <button className="button button-primary" onClick={() => onNavigate('agenda')}>Ver horarios e agendar</button>
+              <p className="muted">Confira as datas liberadas para descarga e consulte os horários disponíveis.</p>
+              <button className="button button-primary" onClick={() => onNavigate('agenda')}>Ver horários e agendar</button>
             </Panel>
           </div>
           <div className="company-home-calendar"><AppointmentsCalendar refresh={refresh} onDetails={showDetails} /></div>
@@ -685,8 +689,9 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
                 </section>
                 <div className="wide booking-stage-actions">
                   {pendingUpload && <p className="muted" role="status">Reserva criada: {pendingUpload.protocol}. Os dados estão preservados; reenvie somente os documentos pendentes.</p>}
-                                    {bookingStep > 2 && bookingStep < 4 && <button className="button button-secondary" type="button" onClick={() => advanceBooking(bookingStep - 1)}>Voltar</button>}
-                  {bookingStep < 4 && <button className="button button-primary" type="button" onClick={() => advanceBooking(bookingStep + 1)}>Próximo</button>}<button className="button button-primary" disabled={busy} hidden={bookingStep !== 4} formNoValidate>{busy ? (pendingUpload ? 'Enviando documentos…' : 'Confirmando…') : pendingUpload ? 'Tentar envio de documentos' : 'Confirmar agendamento'}</button>
+                  {bookingStep > 2 && bookingStep < 4 && <button key="back" className="button button-secondary" type="button" onClick={() => advanceBooking(bookingStep - 1)}>Voltar</button>}
+                  {bookingStep < 4 && <button key="next" className="button button-primary" type="button" onClick={() => advanceBooking(bookingStep + 1)}>Próximo</button>}
+                  <button key="submit" className="button button-primary" disabled={busy} hidden={bookingStep !== 4} formNoValidate>{busy ? (pendingUpload ? 'Enviando documentos…' : 'Confirmando…') : pendingUpload ? 'Tentar envio de documentos' : 'Confirmar agendamento'}</button>
                 </div>
               </form>
             </Panel>
@@ -1469,10 +1474,10 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
         <div className="admin-dashboard">
           <PageTitle eyebrow="VISÃO GERAL" title="Dashboard" description="Acompanhe a operação e a disponibilidade da agenda." action={<button className="button button-secondary" onClick={() => { setRefresh(value => value + 1); void loadDashboard(); }}>↻ Atualizar</button>} />
           <div className="dashboard-metrics">
-            <MetricCard icon="▣" label="Agendamentos de hoje" value={dashboardData ? String(dashboardData.metrics.bookings_today) : '—'} note="confirmados" />
-            <MetricCard icon="◓" label="Vagas disponíveis" value={dashboardData ? String(dashboardData.metrics.available_slots_today) : '—'} note="para hoje" />
-            <MetricCard icon="▬" label="Caminhães cadastrados" value={dashboardData ? String(dashboardData.metrics.trucks_total) : '—'} note="todas as empresas" />
-            <MetricCard icon="♓" label="Motoristas cadastrados" value={dashboardData ? String(dashboardData.metrics.drivers_total) : '—'} note="todas as empresas" />
+            <MetricCard icon="bookings" label="Agendamentos de hoje" value={dashboardData ? String(dashboardData.metrics.bookings_today) : '—'} note="confirmados" />
+            <MetricCard icon="agenda" label="Vagas disponíveis" value={dashboardData ? String(dashboardData.metrics.available_slots_today) : '—'} note="para hoje" />
+            <MetricCard icon="trucks" label="Caminhões cadastrados" value={dashboardData ? String(dashboardData.metrics.trucks_total) : '—'} note="todas as empresas" />
+            <MetricCard icon="drivers" label="Motoristas cadastrados" value={dashboardData ? String(dashboardData.metrics.drivers_total) : '—'} note="todas as empresas" />
           </div>
           <div className="admin-dashboard-grid">
             <Panel title="Próximos agendamentos">

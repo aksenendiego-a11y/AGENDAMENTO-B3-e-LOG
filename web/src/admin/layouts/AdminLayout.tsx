@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SADIcon } from '../../components/SADIcon';
 import './admin.css';
 
 export type AdminNavigationItem = [key: string, label: string, icon: string];
@@ -46,7 +47,7 @@ export function AdminLayout({ email, section, navigation, collapsed, mobileMenuO
             <span className="admin-sidebar-caption">MENU PRINCIPAL</span>
             {navigation.map(([key, label, icon]) => (
               <button type="button" key={key} className={`admin-nav-item ${section === key ? 'active' : ''}`} aria-current={section === key ? 'page' : undefined} onClick={() => onNavigate(key)}>
-                <span className="admin-nav-icon" aria-hidden="true">{icon}</span><span className="admin-nav-label">{key === 'home' ? 'Dashboard' : label}</span>
+                <span className="admin-nav-icon"><SADIcon name={icon} /></span><span className="admin-nav-label">{key === 'home' ? 'Dashboard' : label}</span>
               </button>
             ))}
           </div>
@@ -66,7 +67,7 @@ export function AdminLayout({ email, section, navigation, collapsed, mobileMenuO
       <nav className="admin-mobile-navigation" aria-label="Navegação administrativa">
         {mobileItems.map(([key, label, icon]) => (
           <button type="button" key={key} className={section === key ? 'active' : ''} aria-current={section === key ? 'page' : undefined} onClick={() => onNavigate(key)}>
-            <span aria-hidden="true">{icon}</span><small>{key === 'home' ? 'Início' : key === 'agenda' ? 'Agenda' : key === 'exceptions' ? 'Bloqueios' : label}</small>
+            <span><SADIcon name={icon} /></span><small>{key === 'home' ? 'Início' : key === 'agenda' ? 'Agenda' : key === 'exceptions' ? 'Bloqueios' : label}</small>
           </button>
         ))}
       </nav>
