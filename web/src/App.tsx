@@ -807,7 +807,7 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
           <div className="two-col">
             <Panel title="Cadastrar caminhão">
               <form className="form-stack" onSubmit={createTruck}>
-                <label>Placa<input name="plate" placeholder="ABC1D23" required /></label>
+                <label>Placa<input name="plate" placeholder="ABC-1234 ou ABC1D23" autoCapitalize="characters" autoComplete="off" spellCheck={false} required /><small>Informe no padrão antigo (ABC-1234) ou Mercosul (ABC1D23).</small></label>
                 <label>Tipo de veículo (opcional)<input name="vehicleType" maxLength={80} /></label>
                 <button className="button button-primary">Cadastrar</button>
               </form>
@@ -957,7 +957,7 @@ function TruckManager({ trucks, onSubmit }: { trucks: Array<{ id: string; plate:
     <div className="two-col">
       <Panel title="Cadastrar caminhão">
         <form className="form-stack" onSubmit={onSubmit}>
-          <label>Placa<input name="plate" placeholder="ABC1D23" required /></label>
+          <label>Placa<input name="plate" placeholder="ABC-1234 ou ABC1D23" autoCapitalize="characters" autoComplete="off" spellCheck={false} required /><small>Informe no padrão antigo (ABC-1234) ou Mercosul (ABC1D23).</small></label>
           <label>Tipo de veículo (opcional)<input name="vehicleType" maxLength={80} /></label>
           <button className="button button-primary">Cadastrar caminhão</button>
         </form>

@@ -701,7 +701,7 @@ app.patch('/api/v1/admin/slots/:id', auth, admin, asyncRoute(async (req, res) =>
 
 app.post('/api/v1/company/trucks', auth, asyncRoute(async (req, res) => {
   if (req.session?.role !== 'company' || !req.session.companyId) return res.status(403).json({ error: 'Permissão insuficiente' });
-  const input = z.object({ plate: z.string().trim().transform(value => value.toUpperCase().replace(/[^A-Z0-9]/g, '')).refine(value => /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(value), 'Placa inválida'), vehicleType: z.string().max(80).optional() }).safeParse(req.body);
+  const input = z.object({ plate: z.string().trim().transform(value => value.toUpperCase().replace(/[^A-Z0-9]/g, '')).refine(value => /^(?:[A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$/.test(value), 'Informe uma placa válida: ABC-1234 (padrão antigo) ou ABC1D23 (Mercosul)'), vehicleType: z.string().max(80).optional() }).safeParse(req.body);
   if (!input.success) return res.status(400).json({ error: 'Dados inválidos', details: input.error.flatten().fieldErrors });
   try {
     const result = await pool.query('INSERT INTO trucks(company_id,plate,vehicle_type) VALUES($1,$2,$3) RETURNING id,plate,vehicle_type', [req.session.companyId, input.data.plate, input.data.vehicleType ?? null]);
