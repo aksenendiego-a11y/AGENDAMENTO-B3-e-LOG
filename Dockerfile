@@ -7,6 +7,7 @@ COPY tsconfig.json ./
 RUN npm install
 
 COPY src ./src
+COPY migrations ./migrations
 RUN npm run build
 
 COPY web ./web
@@ -27,5 +28,8 @@ ENV NODE_ENV=production
 ENV PORT=10000
 
 EXPOSE 10000
+
+# Copiar as migrations do builder
+COPY --from=builder /app/migrations ./migrations
 
 CMD ["node", "dist/index.js"]
