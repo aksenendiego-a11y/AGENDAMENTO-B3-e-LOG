@@ -2,6 +2,15 @@ import { DateTime } from 'luxon';
 
 export interface OperatingWindow { start: string; end: string; durationMinutes: number; capacity: number }
 export interface GeneratedSlot { startsAt: string; endsAt: string }
+export interface ScheduleConfig {
+  id: string;
+  timezone: string;
+  effective_from: string;
+  weekly_rules?: any[];
+  rule_type?: 'weekly' | 'range';
+  start_date?: string;
+  end_date?: string;
+}
 
 function localDateTime(date: string, time: string, zone: string): DateTime {
   const value = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm', { zone, setZone: true, locale: 'en-US' });
