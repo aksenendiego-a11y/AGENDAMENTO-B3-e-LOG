@@ -22,7 +22,6 @@ RUN npm ci --only=production
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/web/dist ./web/dist
-COPY --from=builder /app/migrations ./migrations
 
 ENV NODE_ENV=production
 ENV PORT=10000
