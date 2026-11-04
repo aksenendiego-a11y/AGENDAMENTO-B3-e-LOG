@@ -61,7 +61,7 @@ export class AgendamentoB3Service {
     };
     
     this.agendamentos.set(id, agendamento);
-    logger.info(`Agendamento criado: ${id}`, { symbol: options.symbol, date: options.date.toISOString() });
+    logger.info(`Agendamento criado: ${id}`);
     
     return agendamento;
   }
@@ -84,7 +84,7 @@ export class AgendamentoB3Service {
     
     const validSymbols = Object.keys(B3_SYMBOLS);
     if (!validSymbols.includes(options.symbol.toUpperCase())) {
-      logger.warn(`Símbolo ${options.symbol} não está na lista oficial de símbolos`);
+      logger.info(`Símbolo ${options.symbol} não está na lista oficial de símbolos`);
     }
   }
 
@@ -145,7 +145,7 @@ export class AgendamentoB3Service {
     const dayOfWeek = now.getDay();
     // B3 não opera na segunda-feira (dia 1) e no domingo (dia 0)
     if (dayOfWeek === 0 || dayOfWeek === 1) {
-      logger.warn(`Data ${date.toISOString()} é fim de semana`);
+      logger.info(`Data ${date.toISOString()} é fim de semana`);
       return false;
     }
     

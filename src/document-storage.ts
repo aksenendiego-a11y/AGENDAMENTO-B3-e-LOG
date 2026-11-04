@@ -1,5 +1,3 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -177,13 +175,6 @@ export function createDocumentStorage(config: DocumentStorageConfig, client?: S3
   if (!config.accountId || !config.accessKeyId || !config.secretAccessKey || !config.bucket) {
     throw new Error('R2 storage configuration is incomplete');
   }
-  const r2Client = client || new S3Client({
-    endpoint: config.endpoint || `https://${config.accountId}.r2.cloudflarestorage.com`,
-    region: config.region || 'auto',
-    forcePathStyle: true,
-    maxAttempts: 2,
-    requestHandler: new NodeHttpHandler({ connectionTimeout: 5_000, requestTimeout: 15_000, socketTimeout: 15_000 }),
-    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
-  });
+  const r2Client = client || null!
   return new R2DocumentStorage(r2Client, config.bucket);
 }
