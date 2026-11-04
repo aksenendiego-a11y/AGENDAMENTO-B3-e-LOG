@@ -1,11 +1,11 @@
 :root {
-  --yellow: #ffdc00;
-  --yellow-hover: #f0ce00;
-  --dark-bg: #14181e;
-  --dark-card: #1b2129;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-light: #e2e8f0;
+  --yellow: #ffd900;
+  --yellow-hover: #edcb00;
+  --dark-bg: #111111;
+  --dark-card: #1a1a1a;
+  --text-main: #111111;
+  --text-muted: #666666;
+  --border-light: #dddddd;
   --bg-page: #f4f6f9;
   --card-bg: #ffffff;
   --green-bg: #dcfce7;
@@ -2406,20 +2406,20 @@ input, select, textarea { min-height: 36px; border-radius: 6px; padding: 7px 9px
 
 /* REVEST SAD design system refresh */
 :root {
-  --yellow: #f2bd32;
-  --yellow-hover: #dda91f;
-  --dark-bg: #142337;
-  --dark-card: #1b2d43;
-  --text-main: #17283d;
-  --text-muted: #718096;
-  --border-light: #e3eaf1;
-  --bg-page: #f3f6fa;
+  --yellow: #ffd900;
+  --yellow-hover: #edcb00;
+  --dark-bg: #111111;
+  --dark-card: #1a1a1a;
+  --text-main: #111111;
+  --text-muted: #666666;
+  --border-light: #dddddd;
+  --bg-page: #f4f6f9;
   --card-bg: #fff;
-  --brand-navy: #142337;
-  --brand-blue: #2869a8;
-  --brand-blue-soft: #eaf2fb;
-  --brand-amber: #f2bd32;
-  --shadow-card: 0 8px 24px rgba(24, 44, 69, .055);
+  --brand-navy: #111111;
+  --brand-blue: #ffd900;
+  --brand-blue-soft: #fffde6;
+  --brand-amber: #ffd900;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, .06);
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text-main);
   background: var(--bg-page);

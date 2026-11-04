@@ -11,7 +11,7 @@ type Company = { id: string; name: string; active: boolean };
 type CompanyProfile = { id: string; name: string; active: boolean };
 type AdminDashboardData = {
   metrics: { bookings_today: number; available_slots_today: number; trucks_total: number; drivers_total: number };
-  nextBookings: Array<{ id: string; protocol: string; status: string; starts_at: string; timezone: string | null; plate: string; driver_name: string; company_name: string }>;
+  nextBookings: Array<{ id: string; protocol: string; status: string; starts_at: string; timezone: string | null; plate: string; driver_name: string; company_name: string; documents?: DocumentMeta[] }>;
 };
 type DocumentMeta = { id: string; media_type: string; original_name?: string; byte_size?: number; created_at?: string };
 type Booking = {
@@ -1453,6 +1453,14 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
       await loadUsers(usersCompanyId);
     } catch (e) { onError((e as Error).message); }
   };
+  const changeUserPassword = async (userId: string) => {
+    const newPassword = window.prompt('Nova senha (mínimo 12 caracteres):');
+    if (!newPassword || newPassword.length < 12) { if (newPassword) onError('Senha muito curta.'); return; }
+    try {
+      await api(`/api/v1/admin/users/${userId}/password`, json({ newPassword }));
+      onNotice('Senha alterada com sucesso.');
+    } catch (e) { onError((e as Error).message); }
+  };
   const detail = async (id: string) => {
     try { setDetails(await api(`/api/v1/bookings/${id}`)); }
     catch (e) { onError((e as Error).message); }
@@ -1483,12 +1491,18 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
             <Panel title="Próximos agendamentos">
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Protocolo</th><th>Empresa</th><th>Data e horário</th><th>Caminhão</th><th>Motorista</th><th>Status</th><th>Ação</th></tr></thead>
+                  <thead><tr><th>Protocolo</th><th>Empresa</th><th>Data e horário</th><th>Caminhão</th><th>Motorista</th><th>Status</th><th>Documentos</th><th>Ação</th></tr></thead>
                   <tbody>
                     {(dashboardData?.nextBookings ?? []).map(booking => (
                       <tr key={booking.id}>
                         <td><b>{booking.protocol}</b></td><td>{booking.company_name}</td><td>{fmt(booking.starts_at, booking.timezone)}</td>
                         <td>{booking.plate}</td><td>{booking.driver_name}</td><td><span className={`pill ${booking.status}`}>{bookingStatusLabel(booking.status)}</span></td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="btn-download-xml" title={hasFiscalDocument(booking, 'xml') ? 'Baixar XML' : 'XML não anexado'} disabled={!hasFiscalDocument(booking, 'xml')} onClick={() => void downloadBookingDocument(booking as any, 'xml')}>XML</button>
+                            <button className="btn-download-pdf" title={hasFiscalDocument(booking, 'pdf') ? 'Baixar PDF' : 'PDF não anexado'} disabled={!hasFiscalDocument(booking, 'pdf')} onClick={() => void downloadBookingDocument(booking as any, 'pdf')}>PDF</button>
+                          </div>
+                        </td>
                         <td><button className="button button-quiet" onClick={() => void detail(booking.id)}>Detalhes</button></td>
                       </tr>
                     ))}

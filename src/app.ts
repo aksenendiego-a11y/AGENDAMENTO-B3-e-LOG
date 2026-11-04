@@ -1,16 +1,16 @@
 import express, { NextFunction, Request, Response } from 'express';
 import { existsSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import multer from 'multer';
 import { DateTime } from 'luxon';
 import { PoolClient } from 'pg';
 import { z } from 'zod';
-import { SaxesParser } from 'saxes';
 import { pool } from './db';
 import { hashPassword, issueToken, readToken, Session, verifyPassword } from './security';
 import { generateSlots, OperatingWindow, validateOperatingWindows } from './calendar';
+import { createDocumentStorage, DocumentStorageError, documentStorageConfig } from './document-storage';
+import { isDocumentAuthorized, validateDocumentContent, validateDocumentUpload } from './document-policy';
 
 // Express middleware attaches an authenticated session to the request.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -18,13 +18,14 @@ declare global { namespace Express { interface Request { session?: Session } } }
 const loginAttempts = new Map<string, { count: number; until: number }>();
 const registrationAttempts = new Map<string, { count: number; until: number }>();
 const secret = process.env.TOKEN_SECRET ?? '';
-const dataDirectory = path.resolve(process.env.DATA_DIR ?? path.join(process.cwd(), 'private_data'));
-const maxDocumentBytes = Number(process.env.MAX_DOCUMENT_BYTES ?? 10 * 1024 * 1024);
-const storage = multer.diskStorage({
-  destination: (_req, _file, callback) => { void fs.mkdir(dataDirectory, { recursive: true }).then(() => callback(null, dataDirectory), error => callback(error as Error, dataDirectory)); },
-  filename: (_req, file, callback) => callback(null, `${randomBytes(24).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
-});
-const documentUpload = multer({ storage, limits: { fileSize: Number.isSafeInteger(maxDocumentBytes) && maxDocumentBytes > 0 ? maxDocumentBytes : 10 * 1024 * 1024, files: 1 } });
+const documentStorage = createDocumentStorage(documentStorageConfig());
+const absoluteMaxDocumentBytes = 10 * 1024 * 1024;
+const configuredMaxDocumentBytes = Number(process.env.MAX_DOCUMENT_BYTES ?? absoluteMaxDocumentBytes);
+if (!Number.isSafeInteger(configuredMaxDocumentBytes) || configuredMaxDocumentBytes <= 0 || configuredMaxDocumentBytes > absoluteMaxDocumentBytes) {
+  throw new Error('MAX_DOCUMENT_BYTES must be an integer between 1 and 10485760');
+}
+const maxDocumentBytes = configuredMaxDocumentBytes;
+const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: maxDocumentBytes, files: 1 } });
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '128kb' }));
@@ -65,32 +66,6 @@ async function isCurrentConfiguredSlot(slot: { config_id: string | null; local_d
   return actual.some(item => new Date(item.startsAt).getTime() === slot.starts_at.getTime() && new Date(item.endsAt).getTime() === slot.ends_at.getTime());
 }
 function isIsoDate(value: string): boolean { return /^\d{4}-\d{2}-\d{2}$/.test(value) && DateTime.fromISO(value, { zone: 'UTC' }).toISODate() === value; }
-function ensureXmlWellFormed(filePath: string): Promise<void> {
-  return fs.readFile(filePath).then(buffer => {
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^\uFEFF/, '');
-    if (!text.trimStart().startsWith('<') || /<!\s*(DOCTYPE|ENTITY)\b/i.test(text)) throw new Error('XML deve ser bem-formado e não pode conter DTD ou entidades');
-    const parser = new SaxesParser({ xmlns: true });
-    let rootSeen = false;
-    parser.on('opentag', () => { rootSeen = true; });
-    parser.on('error', error => { throw error; });
-    parser.write(text).close();
-    if (!rootSeen) throw new Error('XML vazio ou sem elemento raiz');
-  });
-}
-
-function isStructurallyValidPdf(content: Buffer): boolean {
-  if (content.length < 32) return false;
-  const text = content.toString('latin1');
-  if (!/^%PDF-(?:1\.[0-7]|2\.0)(?:\r\n|\n|\r)/.test(text)) return false;
-  const pointer = /startxref\s+(\d+)\s*%%EOF\s*$/.exec(text);
-  if (!pointer) return false;
-  const offset = Number(pointer[1]);
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset >= content.length) return false;
-  const xref = text.slice(offset, offset + 1024);
-  if (/^xref\b/.test(xref)) return /trailer\s*<</.test(text.slice(offset));
-  return /^\d+\s+\d+\s+obj\b/.test(xref) && /\/Type\s*\/XRef\b/.test(xref) && /stream\r?\n/.test(xref);
-}
-
 app.get('/api/v1/health', (_req, res) => res.json({ status: 'ok' }));
 app.post('/api/v1/auth/login', asyncRoute(async (req, res) => {
   const input = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(256) }).safeParse(req.body);
@@ -454,41 +429,48 @@ app.post('/api/v1/bookings/:id/documents', auth, (req, res, next) => {
 }, asyncRoute(async (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'Envie um arquivo no campo file' });
-  const extension = path.extname(file.originalname).toLowerCase();
-  const originalName = path.basename(file.originalname.replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 180) || `document${extension}`;
-  const storageKey = path.basename(file.filename);
-  const filePath = path.resolve(dataDirectory, storageKey);
-  const cleanup = () => fs.rm(filePath, { force: true });
-  if (!['.pdf', '.xml'].includes(extension) || filePath !== path.join(dataDirectory, storageKey) || !/^[a-f0-9]{48}\.(pdf|xml)$/.test(storageKey)) {
-    await cleanup(); return res.status(400).json({ error: 'Formato de arquivo não permitido' });
-  }
-  const documentType = req.body.documentType;
-  if (!['xml', 'pdf'].includes(documentType) || extension !== `.${documentType}`) { await cleanup(); return res.status(400).json({ error: 'O arquivo não corresponde ao campo de documento informado' }); }
-  const content = await fs.readFile(filePath);
-  let mediaType: 'application/pdf' | 'application/xml';
-  if (extension === '.pdf') {
-    if (!isStructurallyValidPdf(content)) { await cleanup(); return res.status(400).json({ error: 'PDF inválido ou corrompido' }); }
-    mediaType = 'application/pdf';
-  } else {
-    try { await ensureXmlWellFormed(filePath); }
-    catch { await cleanup(); return res.status(400).json({ error: 'XML inválido ou contém declarações não permitidas' }); }
-    mediaType = 'application/xml';
-  }
-  const tenantFilter = req.session!.role === 'company' ? ' AND company_id=$2' : '';
-  const params = req.session!.role === 'company' ? [req.params.id, req.session!.companyId] : [req.params.id];
-  const booking = await pool.query(`SELECT id,company_id FROM bookings WHERE id=$1${tenantFilter}`, params);
-  if (!booking.rowCount) { await cleanup(); return res.status(404).json({ error: 'Agendamento não encontrado' }); }
-  const client = await pool.connect();
+  let validated: ReturnType<typeof validateDocumentUpload>;
   try {
+    validated = validateDocumentUpload({ originalName: file.originalname, mimeType: file.mimetype, size: file.size, documentType: req.body.documentType, maxBytes: maxDocumentBytes });
+  } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Arquivo inválido' }); }
+  const content = file.buffer;
+  try { validateDocumentContent(validated.extension, content); }
+  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Arquivo inválido' }); }
+  const storageKey = `${randomBytes(24).toString('hex')}${validated.extension}`;
+  const sha256 = createHash('sha256').update(content).digest('hex');
+  const tenantFilter = req.session!.role === 'company' ? ' AND company_id=$2' : '';
+  const bookingParams = req.session!.role === 'company' ? [req.params.id, req.session!.companyId] : [req.params.id];
+  let client: PoolClient | null = null;
+  let objectMayExist = false;
+  let commitAttempted = false;
+  try {
+    client = await pool.connect();
     await client.query('BEGIN');
+    const booking = await client.query(`SELECT id,company_id FROM bookings WHERE id=$1${tenantFilter} FOR UPDATE`, bookingParams);
+    if (!booking.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Agendamento não encontrado' }); }
+    const duplicate = await client.query(`SELECT id,booking_id,media_type,original_name,byte_size,created_at FROM booking_documents WHERE booking_id=$1 AND company_id=$2 AND sha256=$3 AND media_type=$4 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, [booking.rows[0].id, booking.rows[0].company_id, sha256, validated.mediaType]);
+    if (duplicate.rowCount) {
+      await client.query('COMMIT');
+      return res.status(200).json({ document: duplicate.rows[0], duplicate: true });
+    }
+    objectMayExist = true;
+    await documentStorage.put(storageKey, content, validated.mediaType);
     const result = await client.query(`INSERT INTO booking_documents(booking_id,company_id,storage_key,media_type,original_name,byte_size,sha256,uploaded_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,booking_id,media_type,original_name,byte_size,created_at`, [booking.rows[0].id, booking.rows[0].company_id, storageKey, mediaType, originalName, content.length, createHash('sha256').update(content).digest('hex'), req.session!.sub]);
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,booking_id,media_type,original_name,byte_size,created_at`, [booking.rows[0].id, booking.rows[0].company_id, storageKey, validated.mediaType, validated.originalName, content.length, sha256, req.session!.sub]);
     await client.query("INSERT INTO document_audit_events(document_id,actor_id,action) VALUES($1,$2,'upload')", [result.rows[0].id, req.session!.sub]);
-    await audit(req.session!.sub, 'document.uploaded', 'booking_document', result.rows[0].id, { bookingId: booking.rows[0].id, mediaType, byteSize: content.length }, client);
+    await audit(req.session!.sub, 'document.uploaded', 'booking_document', result.rows[0].id, { bookingId: booking.rows[0].id, mediaType: validated.mediaType, byteSize: content.length }, client);
+    commitAttempted = true;
     await client.query('COMMIT');
     return res.status(201).json({ document: result.rows[0] });
-  } catch (error) { await client.query('ROLLBACK'); await cleanup(); throw error; }
-  finally { client.release(); }
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => undefined);
+    if (objectMayExist && !commitAttempted) {
+      await documentStorage.delete(storageKey).catch(() => console.error('Private document upload compensation failed', { operation: 'delete' }));
+    } else if (objectMayExist && commitAttempted) {
+      console.error('Private document upload transaction outcome unknown; object retained for reconciliation', { operation: 'commit' });
+    }
+    throw error;
+  } finally { client?.release(); }
 }));
 
 app.delete('/api/v1/bookings/:bookingId/documents/:documentId', auth, asyncRoute(async (req, res) => {
@@ -499,44 +481,37 @@ app.delete('/api/v1/bookings/:bookingId/documents/:documentId', auth, asyncRoute
     await client.query('BEGIN');
     const tenantFilter = req.session!.role === 'company' ? ' AND b.company_id=$3' : '';
     const params = req.session!.role === 'company' ? [req.params.documentId, req.params.bookingId, req.session!.companyId] : [req.params.documentId, req.params.bookingId];
-    const found = await client.query(`SELECT d.id,d.storage_key FROM booking_documents d JOIN bookings b ON b.id=d.booking_id WHERE d.id=$1 AND d.booking_id=$2 AND d.deleted_at IS NULL${tenantFilter} FOR UPDATE OF d`, params);
+    const found = await client.query(`SELECT d.id,d.storage_key,d.company_id,d.deleted_at,b.company_id AS booking_company_id FROM booking_documents d JOIN bookings b ON b.id=d.booking_id WHERE d.id=$1 AND d.booking_id=$2 AND d.company_id=b.company_id${tenantFilter} FOR UPDATE OF d`, params);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Documento nÃ£o encontrado' }); }
+    if (!isDocumentAuthorized(req.session!, found.rows[0].company_id, found.rows[0].booking_company_id)) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Documento não encontrado' }); }
     storageKey = found.rows[0].storage_key;
-    await client.query('UPDATE booking_documents SET deleted_at=now() WHERE id=$1', [found.rows[0].id]);
-    await client.query("INSERT INTO document_audit_events(document_id,actor_id,action) VALUES($1,$2,'delete')", [found.rows[0].id, req.session!.sub]);
-    await audit(req.session!.sub, 'document.deleted', 'booking_document', found.rows[0].id, { bookingId: req.params.bookingId }, client);
+    if (!found.rows[0].deleted_at) {
+      await client.query('UPDATE booking_documents SET deleted_at=now() WHERE id=$1', [found.rows[0].id]);
+      await client.query("INSERT INTO document_audit_events(document_id,actor_id,action) VALUES($1,$2,'delete')", [found.rows[0].id, req.session!.sub]);
+      await audit(req.session!.sub, 'document.deleted', 'booking_document', found.rows[0].id, { bookingId: req.params.bookingId }, client);
+    }
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
-  const key = path.basename(storageKey);
-  if (/^[a-f0-9]{48}\.(pdf|xml)$/.test(key)) {
-    try { await fs.rm(path.join(dataDirectory, key), { force: true }); }
-    catch { console.error('Private document cleanup failed', { documentId: req.params.documentId }); }
-  }
+  await documentStorage.delete(storageKey);
   return res.status(204).end();
 }));
 
 app.get('/api/v1/documents/:id/download', auth, asyncRoute(async (req, res) => {
   if (!z.string().uuid().safeParse(req.params.id).success) return res.status(400).json({ error: 'Identificador inválido' });
-  const params: unknown[] = [req.params.id];
-  const tenantFilter = req.session!.role === 'company' ? ' AND d.company_id=$2' : '';
-  if (req.session!.role === 'company') params.push(req.session!.companyId);
-  const result = await pool.query(`SELECT d.id,d.storage_key,d.media_type,d.original_name FROM booking_documents d WHERE d.id=$1 AND d.deleted_at IS NULL${tenantFilter}`, params);
+  const result = await pool.query(`SELECT d.id,d.company_id,d.storage_key,d.media_type,d.original_name,b.company_id AS booking_company_id FROM booking_documents d JOIN bookings b ON b.id=d.booking_id WHERE d.id=$1 AND d.deleted_at IS NULL AND d.company_id=b.company_id`, [req.params.id]);
   if (!result.rowCount) return res.status(404).json({ error: 'Documento não encontrado' });
   const document = result.rows[0];
-  const key = path.basename(document.storage_key);
-  if (key !== document.storage_key || !/^[a-f0-9]{48}\.(pdf|xml)$/.test(key)) return res.status(404).json({ error: 'Documento não encontrado' });
-  const filePath = path.resolve(dataDirectory, key);
-  if (path.dirname(filePath) !== dataDirectory) return res.status(404).json({ error: 'Documento não encontrado' });
+  if (!isDocumentAuthorized(req.session!, document.company_id, document.booking_company_id)) return res.status(404).json({ error: 'Documento não encontrado' });
+  const content = await documentStorage.get(document.storage_key, maxDocumentBytes);
+  if (!content) return res.status(404).json({ error: 'Documento não encontrado' });
   await pool.query("INSERT INTO document_audit_events(document_id,actor_id,action) VALUES($1,$2,'download')", [document.id, req.session!.sub]);
   await audit(req.session!.sub, 'document.downloaded', 'booking_document', document.id, {});
   res.setHeader('Content-Type', document.media_type);
   const downloadName = document.original_name || `${document.id}.${document.media_type === 'application/pdf' ? 'pdf' : 'xml'}`;
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  const stream = (await import('node:fs')).createReadStream(filePath);
-  stream.on('error', () => { if (!res.headersSent) res.status(404).json({ error: 'Arquivo não encontrado' }); else res.destroy(); });
-  stream.pipe(res);
+  return res.status(200).send(content);
 }));
 
 app.get('/api/v1/bookings/:id/documents/download/:type', auth, asyncRoute(async (req, res) => {
@@ -546,20 +521,19 @@ app.get('/api/v1/bookings/:id/documents/download/:type', auth, asyncRoute(async 
   const tenantFilter = req.session!.role === 'company' ? ' AND d.company_id=$2' : '';
   const params = req.session!.role === 'company' ? [req.params.id, req.session!.companyId] : [req.params.id];
   const mediaFilter = type === 'pdf' ? "d.media_type='application/pdf'" : "(d.media_type='application/xml' OR d.media_type='text/xml')";
-  const result = await pool.query(`SELECT d.id,d.storage_key,d.media_type,d.original_name FROM booking_documents d WHERE d.booking_id=$1 AND d.deleted_at IS NULL AND ${mediaFilter}${tenantFilter} ORDER BY d.created_at DESC LIMIT 1`, params);
+  const result = await pool.query(`SELECT d.id,d.company_id,d.storage_key,d.media_type,d.original_name,b.company_id AS booking_company_id FROM booking_documents d JOIN bookings b ON b.id=d.booking_id WHERE d.booking_id=$1 AND d.deleted_at IS NULL AND d.company_id=b.company_id AND ${mediaFilter}${tenantFilter} ORDER BY d.created_at DESC LIMIT 1`, params);
   if (result.rowCount) {
     const document = result.rows[0];
-    const key = path.basename(document.storage_key);
-    const filePath = path.resolve(dataDirectory, key);
-    if (key === document.storage_key && /^[a-f0-9]{48}\.(pdf|xml)$/.test(key) && path.dirname(filePath) === dataDirectory && (await import('node:fs')).existsSync(filePath)) {
+    if (isDocumentAuthorized(req.session!, document.company_id, document.booking_company_id)) {
+      const content = await documentStorage.get(document.storage_key, maxDocumentBytes);
+      if (!content) return res.status(404).json({ error: 'Documento fiscal não anexado a este agendamento.' });
       await pool.query("INSERT INTO document_audit_events(document_id,actor_id,action) VALUES($1,$2,'download')", [document.id, req.session!.sub]);
       await audit(req.session!.sub, 'document.downloaded', 'booking_document', document.id, {});
       res.setHeader('Content-Type', document.media_type);
       const downloadName = document.original_name || `${document.id}.${type}`;
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      const stream = (await import('node:fs')).createReadStream(filePath);
-      return stream.pipe(res);
+      return res.status(200).send(content);
     }
   }
   return res.status(404).json({ error: 'Documento fiscal não anexado a este agendamento.' });
@@ -654,6 +628,26 @@ app.patch('/api/v1/admin/users/:id', auth, admin, asyncRoute(async (req, res) =>
   return res.json({ user: result.rows[0] });
 }));
 
+app.post('/api/v1/auth/password', auth, asyncRoute(async (req, res) => {
+  const input = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(12).max(256) }).safeParse(req.body);
+  if (!input.success) return res.status(400).json({ error: 'Senha atual e nova senha (mínimo 12 caracteres) são obrigatórias' });
+  const user = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.session!.sub]);
+  if (!user.rowCount || !verifyPassword(input.data.currentPassword, user.rows[0].password_hash)) return res.status(401).json({ error: 'Senha atual incorreta' });
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hashPassword(input.data.newPassword), req.session!.sub]);
+  await audit(req.session!.sub, 'user.password.changed', 'user', req.session!.sub, {});
+  return res.status(200).json({ message: 'Senha alterada com sucesso' });
+}));
+
+app.patch('/api/v1/admin/users/:id/password', auth, admin, asyncRoute(async (req, res) => {
+  if (!z.string().uuid().safeParse(req.params.id).success) return res.status(400).json({ error: 'Identificador inválido' });
+  const input = z.object({ newPassword: z.string().min(12).max(256) }).safeParse(req.body);
+  if (!input.success) return res.status(400).json({ error: 'Nova senha (mínimo 12 caracteres) é obrigatória' });
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hashPassword(input.data.newPassword), req.params.id]);
+  await audit(req.session!.sub, 'admin.user.password.changed', 'user', req.params.id, {});
+  return res.status(200).json({ message: 'Senha alterada com sucesso pelo administrador' });
+}));
+
+
 app.post('/api/v1/admin/users', auth, admin, asyncRoute(async (req, res) => {
   const input = z.object({ email: z.string().email().max(254), password: z.string().min(12).max(256), companyId: z.string().uuid() }).safeParse(req.body);
   if (!input.success) return res.status(400).json({ error: 'Dados inválidos', details: input.error.flatten().fieldErrors });
@@ -731,9 +725,14 @@ if (existsSync(webDist)) {
 app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada' }));
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError) return res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Arquivo excede o tamanho máximo permitido' : 'Upload inválido' });
+  if (error instanceof DocumentStorageError) {
+    console.error('Private document storage operation failed', { operation: error.operation });
+    return res.status(503).json({ error: 'Armazenamento de documentos temporariamente indisponível' });
+  }
   const databaseError = error as { code?: string; constraint?: string };
   console.error('API request failed', { message: error instanceof Error ? error.message : 'unknown error', code: databaseError.code, constraint: databaseError.constraint });
   if (process.env.NODE_ENV === 'development') console.error(error instanceof Error ? error.stack : error);
   return res.status(500).json({ error: 'Erro interno' });
 });
+export function closeDocumentStorage(): void { documentStorage.close(); }
 export default app;
