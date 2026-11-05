@@ -99,7 +99,8 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await expect(page.getByRole('heading', { name: 'Configuração da agenda' })).toBeVisible();
 
   await page.getByLabel('Fuso horário IANA').fill('America/Sao_Paulo');
-  await page.getByLabel('Vigência a partir de').fill(scheduleDate);
+  await page.getByLabel('Início da vigência').fill(scheduleDate);
+  await page.getByLabel('Fim da vigência').fill(scheduleDate);
   const rule = page.locator('form.rule-form').first();
   await rule.getByLabel('Dia').selectOption(String(bookingDay.weekday));
   await rule.getByLabel('Abre').fill('10:00');

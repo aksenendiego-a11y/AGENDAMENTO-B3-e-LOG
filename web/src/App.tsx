@@ -1328,6 +1328,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
   const [windows, setWindows] = useState<DayWindow[]>([]);
   const [timezone, setTimezone] = useState('America/Sao_Paulo');
   const [effectiveFrom, setEffectiveFrom] = useState(dateValue(new Date()));
+  const [effectiveTo, setEffectiveTo] = useState('');
   const [bookingFilterProtocol, setBookingFilterProtocol] = useState('');
   const [bookingFilterPlate, setBookingFilterPlate] = useState('');
   const [bookingFilterCompany, setBookingFilterCompany] = useState('');
@@ -1386,11 +1387,15 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
       onError('Adicione pelo menos uma faixa de horário antes de publicar a agenda.');
       return;
     }
+    if (!effectiveTo || effectiveTo < effectiveFrom) {
+      onError('Informe uma data final igual ou posterior à data inicial da vigência.');
+      return;
+    }
     const byDay = new Map<number, WindowRule[]>();
     windows.forEach(({ weekday, ...window }) => byDay.set(weekday, [...(byDay.get(weekday) ?? []), window]));
     setBusy(true);
     try {
-      await api('/api/v1/admin/calendar/configs', json({ timezone, effectiveFrom, weeklyRules: [...byDay].map(([weekday, dayWindows]) => ({ weekday, windows: dayWindows })) }));
+      await api('/api/v1/admin/calendar/configs', json({ timezone, effectiveFrom, effectiveTo, weeklyRules: [...byDay].map(([weekday, dayWindows]) => ({ weekday, windows: dayWindows })) }));
       setWindows([]);
       await loadConfigs();
       onNotice('Configuração de calendário publicada com sucesso.');
@@ -1523,7 +1528,12 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
           <Panel title="Nova configuração com vigência">
             <div className="form-grid">
               <label>Fuso horário IANA<input value={timezone} onChange={e => setTimezone(e.target.value)} placeholder="Ex.: America/Sao_Paulo" /></label>
-              <label>Vigência a partir de<input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} /></label>
+              <fieldset className="calendar-effective-range">
+                <legend>Vigência</legend>
+                <label>Início<input aria-label="Início da vigência" type="date" required value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} /></label>
+                <span aria-hidden="true">a</span>
+                <label>Fim<input aria-label="Fim da vigência" type="date" required min={effectiveFrom} value={effectiveTo} onChange={e => setEffectiveTo(e.target.value)} /></label>
+              </fieldset>
             </div>
             <form className="rule-form schedule-window-form" onSubmit={addWindow}>
               <label>Dia<select name="weekday">{[1, 2, 3, 4, 5, 6, 7].map(d => <option key={d} value={d}>{weekdayNames[d % 7]}</option>)}</select></label>
@@ -1561,7 +1571,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
             </form>
           </Panel>
           <Panel title="Configurações publicadas">
-            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente desde {String(configuration.effective_from ?? '').slice(0, 10)}</span></summary><pre>{JSON.stringify(configuration.weekly_rules, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
+            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente de {String(configuration.effective_from ?? '').slice(0, 10)} a {configuration.end_date ? String(configuration.end_date).slice(0, 10) : 'sem data final'}</span></summary><pre>{JSON.stringify(configuration.weekly_rules, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
           </Panel>
         </div>
       )}

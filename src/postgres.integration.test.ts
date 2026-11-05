@@ -284,4 +284,28 @@ function makeValidPdf(): Buffer {
     expect(monthlySummary.days.find(day => day.date === nextOccurrence)?.bookingCount).toBe(1);
     expect(monthlySummary.days.find(day => day.date === nextOccurrence)?.bookings[0].protocol).toMatch(/^SAD-/);
   });
+
+  it('limits weekly configuration availability to its inclusive effective date range', async () => {
+    const effectiveDate = DateTime.now().setZone('America/Sao_Paulo').plus({ days: 40 });
+    const effectiveFrom = effectiveDate.toISODate()!;
+    const effectiveTo = effectiveDate.plus({ days: 7 }).toISODate()!;
+    const headers = { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' };
+    const configured = await fetch(`${baseUrl}/admin/calendar/configs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        timezone: 'America/Sao_Paulo',
+        effectiveFrom,
+        effectiveTo,
+        weeklyRules: [{ weekday: effectiveDate.weekday, windows: [{ start: '10:00', end: '11:00', durationMinutes: 30, capacity: 2 }] }],
+      }),
+    });
+    expect(configured.status).toBe(201);
+
+    const availabilityFor = async (date: string) => fetch(`${baseUrl}/availability?from=${date}&to=${date}`, { headers: { authorization: `Bearer ${adminToken}` } }).then(response => response.json()) as Promise<{ days: Array<{ date: string; status: string }> }>;
+    expect((await availabilityFor(effectiveFrom)).days[0].status).toBe('available');
+    expect((await availabilityFor(effectiveTo)).days[0].status).toBe('available');
+    const afterEffectiveTo = effectiveDate.plus({ days: 8 }).toISODate()!;
+    expect((await availabilityFor(afterEffectiveTo)).days[0].status).toBe('no-schedule');
+  });
 });

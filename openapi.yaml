@@ -70,6 +70,7 @@ paths:
               properties:
                 timezone: {type: string, example: America/Sao_Paulo}
                 effectiveFrom: {type: string, format: date}
+                effectiveTo: {type: string, format: date, description: Data final inclusiva da vigência; omitida, mantém a configuração sem término}
                 weeklyRules:
                   type: array
                   items:

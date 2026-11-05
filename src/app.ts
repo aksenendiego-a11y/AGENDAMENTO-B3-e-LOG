@@ -54,9 +54,11 @@ async function isCurrentConfiguredSlot(slot: { config_id: string | null; local_d
   if (!slot.config_id) return true;
   if (!slot.local_date || !slot.timezone) return false;
   const localDate = slot.local_date instanceof Date ? DateTime.fromJSDate(slot.local_date, { zone: 'UTC' }).toISODate()! : String(slot.local_date).slice(0, 10);
-  const current = await client.query('SELECT id,timezone,weekly_rules FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
+  const current = await client.query('SELECT id,timezone,weekly_rules,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
   if (!current.rowCount || current.rows[0].id !== slot.config_id) return false;
   const config = current.rows[0];
+  const effectiveTo = dateOnly(config.end_date);
+  if (effectiveTo && effectiveTo < localDate) return false;
   const exception = await client.query('SELECT blocked,windows FROM schedule_exceptions WHERE config_id=$1 AND local_date=$2', [config.id, localDate]);
   if (exception.rowCount && exception.rows[0].blocked) return false;
   const date = DateTime.fromISO(localDate, { zone: config.timezone });
@@ -66,6 +68,10 @@ async function isCurrentConfiguredSlot(slot: { config_id: string | null; local_d
   return actual.some(item => new Date(item.startsAt).getTime() === slot.starts_at.getTime() && new Date(item.endsAt).getTime() === slot.ends_at.getTime());
 }
 function isIsoDate(value: string): boolean { return /^\d{4}-\d{2}-\d{2}$/.test(value) && DateTime.fromISO(value, { zone: 'UTC' }).toISODate() === value; }
+function dateOnly(value: unknown): string | null {
+  if (!value) return null;
+  return value instanceof Date ? DateTime.fromJSDate(value, { zone: 'UTC' }).toISODate() : String(value).slice(0, 10);
+}
 app.get('/api/v1/health', (_req, res) => res.json({ status: 'ok' }));
 app.post('/api/v1/auth/login', asyncRoute(async (req, res) => {
   const input = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(256) }).safeParse(req.body);
@@ -121,14 +127,15 @@ app.post('/api/v1/auth/register', asyncRoute(async (req, res) => {
 }));
 
 app.get('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (_req, res) => {
-  const result = await pool.query('SELECT id,timezone,effective_from,weekly_rules,created_at FROM schedule_configs ORDER BY effective_from DESC');
+  const result = await pool.query('SELECT id,timezone,effective_from,end_date,weekly_rules,created_at FROM schedule_configs ORDER BY effective_from DESC');
   return res.json({ configurations: result.rows });
 }));
 
 app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, res) => {
   const windowSchema = z.object({ start: z.string(), end: z.string(), durationMinutes: z.number().int().positive().max(1440), capacity: z.number().int().positive() });
-  const input = z.object({ timezone: z.string().min(1).max(100), effectiveFrom: z.string(), weeklyRules: z.array(z.object({ weekday: z.number().int().min(1).max(7), windows: z.array(windowSchema) })).max(7) }).safeParse(req.body);
-  if (!input.success || (input.success && !isIsoDate(input.data.effectiveFrom))) return res.status(400).json({ error: 'Configuração de calendário inválida', details: input.success ? undefined : input.error.flatten().fieldErrors });
+  const input = z.object({ timezone: z.string().min(1).max(100), effectiveFrom: z.string(), effectiveTo: z.string().optional(), weeklyRules: z.array(z.object({ weekday: z.number().int().min(1).max(7), windows: z.array(windowSchema) })).max(7) }).safeParse(req.body);
+  if (!input.success || (input.success && (!isIsoDate(input.data.effectiveFrom) || (input.data.effectiveTo !== undefined && !isIsoDate(input.data.effectiveTo))))) return res.status(400).json({ error: 'Configuração de calendário inválida', details: input.success ? undefined : input.error.flatten().fieldErrors });
+  if (input.data.effectiveTo && input.data.effectiveTo < input.data.effectiveFrom) return res.status(400).json({ error: 'A data final da vigência deve ser igual ou posterior à inicial' });
   if (!input.data.weeklyRules.some(rule => rule.windows.length > 0)) return res.status(400).json({ error: 'Adicione ao menos uma faixa de horário antes de publicar a agenda' });
   if (!DateTime.now().setZone(input.data.timezone).isValid) return res.status(400).json({ error: 'Fuso horário IANA inválido' });
   const today = DateTime.now().setZone(input.data.timezone).toISODate()!;
@@ -148,9 +155,9 @@ app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, r
     if (latest.rows[0].effective_from && input.data.effectiveFrom <= DateTime.fromJSDate(new Date(latest.rows[0].effective_from)).toISODate()!) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Uma nova versão deve ter vigência posterior à configuração mais recente' }); }
     const existing = await client.query("SELECT 1 FROM bookings b JOIN schedule_slots s ON s.id=b.slot_id WHERE b.status='confirmed' AND (s.local_date >= $1 OR s.starts_at >= (($1::date)::timestamp AT TIME ZONE $2)) LIMIT 1", [input.data.effectiveFrom, input.data.timezone]);
     if (existing.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Há reservas confirmadas a partir da vigência. Escolha uma data posterior à última reserva.' }); }
-    const result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,weekly_rules,created_by) VALUES($1,$2,$3,$4) RETURNING id,timezone,effective_from,weekly_rules,created_at', [input.data.timezone, input.data.effectiveFrom, JSON.stringify(input.data.weeklyRules), req.session!.sub]);
+    const result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,end_date,weekly_rules,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,timezone,effective_from,end_date,weekly_rules,created_at', [input.data.timezone, input.data.effectiveFrom, input.data.effectiveTo ?? null, JSON.stringify(input.data.weeklyRules), req.session!.sub]);
     await client.query("UPDATE schedule_slots SET blocked=true WHERE local_date >= $1 OR (config_id IS NULL AND starts_at >= (($1::date)::timestamp AT TIME ZONE $2))", [input.data.effectiveFrom, input.data.timezone]);
-    await audit(req.session!.sub, 'calendar.configuration.created', 'schedule_config', result.rows[0].id, { effectiveFrom: input.data.effectiveFrom }, client);
+    await audit(req.session!.sub, 'calendar.configuration.created', 'schedule_config', result.rows[0].id, { effectiveFrom: input.data.effectiveFrom, effectiveTo: input.data.effectiveTo ?? null }, client);
     await client.query('COMMIT');
     return res.status(201).json({ configuration: result.rows[0] });
   } catch (error: unknown) {
@@ -166,8 +173,9 @@ app.post('/api/v1/admin/calendar/exceptions', auth, admin, asyncRoute(async (req
   if (!input.success || (input.success && !isIsoDate(input.data.localDate)) || (input.success && !input.data.blocked && !input.data.windows)) return res.status(400).json({ error: 'Exceção inválida: data ISO, bloqueio ou faixas são obrigatórios' });
   try { if (input.data.windows) validateOperatingWindows(input.data.windows); }
   catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Faixas inválidas' }); }
-  const config = await pool.query('SELECT id,timezone FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [input.data.localDate]);
-  if (!config.rowCount) return res.status(409).json({ error: 'Configure primeiro o calendário' });
+  const config = await pool.query('SELECT id,timezone,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [input.data.localDate]);
+  const effectiveTo = config.rowCount ? dateOnly(config.rows[0].end_date) : null;
+  if (!config.rowCount || (effectiveTo && effectiveTo < input.data.localDate)) return res.status(409).json({ error: 'Não há configuração de calendário vigente para esta data' });
   if (input.data.localDate < DateTime.now().setZone(config.rows[0].timezone).toISODate()!) return res.status(400).json({ error: 'A data da exceção não pode estar no passado' });
   const client = await pool.connect();
   try {
@@ -207,10 +215,12 @@ app.get('/api/v1/availability', auth, asyncRoute(async (req, res) => {
   for (let day = startDay; day <= endDay; day = day.plus({ days: 1 })) {
     const localDate = day.toISODate()!;
     days.set(localDate, { date: localDate, timezone: null, configured: false, blocked: false, capacity: 0, occupied: 0, remaining: 0, bookingCount: 0, status: 'no-schedule', slots: [], bookings: [] });
-    const config = await pool.query('SELECT id,timezone,weekly_rules FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
+    const config = await pool.query('SELECT id,timezone,weekly_rules,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
     if (!config.rowCount) continue;
-    configurationFound = true;
     const schedule = config.rows[0];
+    const effectiveTo = dateOnly(schedule.end_date);
+    if (effectiveTo && effectiveTo < localDate) continue;
+    configurationFound = true;
     const exception = await pool.query('SELECT blocked,windows FROM schedule_exceptions WHERE config_id=$1 AND local_date=$2', [schedule.id, localDate]);
     const rule = (schedule.weekly_rules as Array<{ weekday: number; windows: OperatingWindow[] }>).find(item => item.weekday === day.weekday);
     const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : rule?.windows ?? [];
