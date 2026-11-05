@@ -762,7 +762,7 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
                       <td><span className={`pill ${b.status}`}>{bookingStatusLabel(b.status)}</span></td>
                       <td>
                         <div className="row-actions">
-                          <button className="btn-download-xml" disabled={!hasFiscalDocument(b, 'xml')} onClick={() => void downloadBookingDocument(b, 'xml')}>Baixar XML</button>
+                          <button className="btn-download-xml" onClick={() => void downloadBookingDocument(b, 'xml')}>Baixar XML</button>
                           <button className="btn-download-pdf" disabled={!hasFiscalDocument(b, 'pdf')} onClick={() => void downloadBookingDocument(b, 'pdf')}>Baixar Nota (PDF)</button>
                         </div>
                       </td>
@@ -896,7 +896,7 @@ function BookingDetails({ detail, onClose, onDeleteDocument }: { detail: Booking
           <strong>NF Nº {booking.invoice_number}</strong>
         </div>
         <div className="row-actions">
-          <button className="btn-download-xml" disabled={!hasFiscalDocument(bookingWithDocuments, 'xml')} onClick={() => void downloadBookingDocument(bookingWithDocuments, 'xml')}>
+          <button className="btn-download-xml" onClick={() => void downloadBookingDocument(bookingWithDocuments, 'xml')}>
             Baixar XML
           </button>
           <button className="btn-download-pdf" disabled={!hasFiscalDocument(bookingWithDocuments, 'pdf')} onClick={() => void downloadBookingDocument(bookingWithDocuments, 'pdf')}>
@@ -1095,7 +1095,7 @@ function BookingTable({ bookings, onDetails, onCancel, onReschedule }: { booking
               <td><span className={`pill ${b.status}`}>{bookingStatusLabel(b.status)}</span></td>
               <td>
                 <div className="row-actions">
-                  <button className="btn-download-xml" title={hasFiscalDocument(b, 'xml') ? 'Baixar XML da NF' : 'XML ainda não anexado'} disabled={!hasFiscalDocument(b, 'xml')} onClick={() => void downloadBookingDocument(b, 'xml')}>
+                  <button className="btn-download-xml" title="Baixar XML da NF" onClick={() => void downloadBookingDocument(b, 'xml')}>
                     XML
                   </button>
                   <button className="btn-download-pdf" title={hasFiscalDocument(b, 'pdf') ? 'Baixar Nota Fiscal (PDF)' : 'PDF ainda não anexado'} disabled={!hasFiscalDocument(b, 'pdf')} onClick={() => void downloadBookingDocument(b, 'pdf')}>
@@ -1504,7 +1504,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
                         <td>{booking.plate}</td><td>{booking.driver_name}</td><td><span className={`pill ${booking.status}`}>{bookingStatusLabel(booking.status)}</span></td>
                         <td>
                           <div className="row-actions">
-                            <button className="btn-download-xml" title={hasFiscalDocument(booking, 'xml') ? 'Baixar XML' : 'XML não anexado'} disabled={!hasFiscalDocument(booking, 'xml')} onClick={() => void downloadBookingDocument(booking as any, 'xml')}>XML</button>
+                            <button className="btn-download-xml" title="Baixar XML" onClick={() => void downloadBookingDocument(booking as any, 'xml')}>XML</button>
                             <button className="btn-download-pdf" title={hasFiscalDocument(booking, 'pdf') ? 'Baixar PDF' : 'PDF não anexado'} disabled={!hasFiscalDocument(booking, 'pdf')} onClick={() => void downloadBookingDocument(booking as any, 'pdf')}>PDF</button>
                           </div>
                         </td>

@@ -20,6 +20,7 @@ vi.mock('./document-storage', () => {
 
 const tokenSecret = 'unit-test-secret-that-is-not-a-credential';
 const userToken = (companyId: string) => issueToken({ sub: `user-${companyId}`, role: 'company', companyId }, tokenSecret, 600);
+const adminToken = issueToken({ sub: 'admin-user', role: 'admin', companyId: null }, tokenSecret, 600);
 const documentId = '11111111-1111-4111-8111-111111111111';
 const bookingId = '22222222-2222-4222-8222-222222222222';
 const knownObjectKey = `${'b'.repeat(48)}.xml`;
@@ -85,6 +86,26 @@ describe('document HTTP authorization and operation ordering', () => {
     const response = await fetch(`${baseUrl}/api/v1/documents/${documentId}/download`, { headers: { authorization: `Bearer ${userToken('company-a')}` } });
     expect(response.status).toBe(404);
     expect(mocks.storage.get).not.toHaveBeenCalled();
+  });
+
+  it('allows the owning company and administrators to download an attached XML', async () => {
+    mocks.pool.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM users WHERE id=$1')) return { rowCount: 1, rows: [{}] };
+      if (sql.includes('FROM booking_documents d JOIN bookings')) return {
+        rowCount: 1,
+        rows: [{ id: documentId, company_id: 'company-a', booking_company_id: 'company-a', storage_key: knownObjectKey, media_type: 'application/xml', original_name: 'invoice.xml' }],
+      };
+      return { rowCount: 1, rows: [] };
+    });
+
+    for (const token of [userToken('company-a'), adminToken]) {
+      const response = await fetch(`${baseUrl}/api/v1/documents/${documentId}/download`, { headers: { authorization: `Bearer ${token}` } });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/xml');
+      expect(await response.text()).toContain('<invoice/>');
+    }
+
+    expect(mocks.storage.get).toHaveBeenCalledTimes(2);
   });
 
   it('does not delete a known object key for another company', async () => {
