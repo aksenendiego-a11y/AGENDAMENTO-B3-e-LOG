@@ -297,7 +297,7 @@ export function App() {
   );
 }
 
-// Tela de Login com caminhão e visual Revest
+// Tela de Login — Technical/Professional
 function Login({ onLogin, onRegister, error }: { onLogin: (email: string, password: string) => void; onRegister: (companyName: string, email: string, password: string) => Promise<void>; error: string }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [submitting, setSubmitting] = useState(false);
@@ -313,60 +313,105 @@ function Login({ onLogin, onRegister, error }: { onLogin: (email: string, passwo
 
   return (
     <main className="login-screen">
-      <section className="login-showcase">
-        <div className="login-brand-large">
-          <span className="revest-wordmark">
-            <span>REVEST</span>
-            <small>ACABAMENTOS</small>
-          </span>
+      {/* Left showcase — Trucks illustration */}
+      <section className="login-showcase" aria-hidden="true">
+        <div className="login-brand">
+          <div className="wordmark">
+            <span className="main">REVEST</span>
+            <small className="sub">ACABAMENTOS</small>
+          </div>
         </div>
         <div className="login-copy">
-          <span className="badge-tag">LOGÍSTICA COM EFICIÊNCIA</span>
-          <h1>Agendamentos simples.<br />Operação organizada.</h1>
-          <p>Gerencie suas descargas em um só lugar.</p>
+          <h1>Agendamento de descarga para operações logísticas</h1>
+          <p>Dashboard unificado para gerenciar frota, motoristas, agendamentos e documentos fiscais.</p>
         </div>
-        <svg className="login-truck-art" viewBox="0 0 520 250" fill="none" aria-hidden="true">
-          <path d="M42 183h268V67H42z" fill="#ffd900" />
-          <path d="M310 112h92l67 70v1H310z" fill="#e9b900" />
-          <path d="M334 128h56l42 43H334z" fill="#182630" />
-          <path d="M69 87h201v78H69z" fill="#101820" />
-          <path d="M86 104h166M86 121h166M86 138h166" stroke="#ffd900" strokeWidth="4" opacity=".8" />
-          <path d="M31 184h449" stroke="#d8e0e8" strokeWidth="8" strokeLinecap="round" />
-          <circle cx="117" cy="190" r="31" fill="#0b1117" stroke="#dce3e9" strokeWidth="7" />
-          <circle cx="117" cy="190" r="10" fill="#ffd900" />
-          <circle cx="386" cy="190" r="31" fill="#0b1117" stroke="#dce3e9" strokeWidth="7" />
-          <circle cx="386" cy="190" r="10" fill="#ffd900" />
-          <path d="M20 219h480" stroke="#ffd900" strokeWidth="3" strokeDasharray="20 16" opacity=".6" />
+        <svg className="login-trucks" viewBox="0 0 600 320" fill="none" aria-hidden="true" role="img" aria-label="Caminhões REVEST em operação">
+          {/* Ground line */}
+          <line x1="0" y1="280" x2="600" y2="280" stroke="#e2e8f0" strokeWidth="2" />
+          {/* Truck 1 - foreground */}
+          <g transform="translate(60, 160)">
+            {/* Cabin */}
+            <rect x="0" y="0" width="80" height="50" rx="4" fill="#0f172a" />
+            <rect x="80" y="10" width="30" height="40" rx="2" fill="#0f172a" />
+            {/* Windshield */}
+            <path d="M80 10 L95 10 L80 50 Z" fill="#1e293b" opacity="0.8" />
+            {/* Yellow accent stripe */}
+            <rect x="0" y="44" width="110" height="4" fill="#ffd900" />
+            {/* Wheels */}
+            <circle cx="20" cy="58" r="14" fill="#1e293b" stroke="#334155" strokeWidth="2" />
+            <circle cx="20" cy="58" r="6" fill="#0f172a" />
+            <circle cx="90" cy="58" r="14" fill="#1e293b" stroke="#334155" strokeWidth="2" />
+            <circle cx="90" cy="58" r="6" fill="#0f172a" />
+            {/* REVEST logo on side */}
+            <text x="55" y="30" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="11" fontWeight="700" fill="#ffd900" letterSpacing="0.5">REVEST</text>
+          </g>
+          {/* Truck 2 - middle */}
+          <g transform="translate(220, 180)" opacity="0.7">
+            <rect x="0" y="0" width="70" height="45" rx="4" fill="#1e293b" />
+            <rect x="70" y="8" width="25" height="37" rx="2" fill="#1e293b" />
+            <path d="M70 8 L82 8 L70 45 Z" fill="#0f172a" opacity="0.6" />
+            <rect x="0" y="39" width="95" height="3" fill="#ffd900" opacity="0.5" />
+            <circle cx="18" cy="53" r="12" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
+            <circle cx="78" cy="53" r="12" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
+            <text x="47" y="27" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="10" fontWeight="600" fill="#ffd900" opacity="0.6" letterSpacing="0.5">REVEST</text>
+          </g>
+          {/* Truck 3 - background */}
+          <g transform="translate(400, 200)" opacity="0.45">
+            <rect x="0" y="0" width="60" height="40" rx="3" fill="#334155" />
+            <rect x="60" y="6" width="22" height="34" rx="2" fill="#334155" />
+            <path d="M60 6 L72 6 L60 40 Z" fill="#1e293b" opacity="0.4" />
+            <rect x="0" y="35" width="82" height="2" fill="#ffd900" opacity="0.3" />
+            <circle cx="15" cy="48" r="10" fill="#1e293b" stroke="#475569" strokeWidth="1" />
+            <circle cx="65" cy="48" r="10" fill="#1e293b" stroke="#475569" strokeWidth="1" />
+          </g>
+          {/* Dock/warehouse silhouette */}
+          <g transform="translate(0, 240)" opacity="0.15" fill="#0f172a">
+            <rect x="0" y="0" width="600" height="80" />
+            <rect x="100" y="-60" width="80" height="60" rx="4 4 0 0" />
+            <rect x="300" y="-80" width="120" height="80" rx="4 4 0 0" />
+            <rect x="500" y="-50" width="60" height="50" rx="4 4 0 0" />
+          </g>
+          {/* Ambient particles */}
+          <g fill="#ffd900" opacity="0.15">
+            <circle cx="80" cy="80" r="2" />
+            <circle cx="200" cy="60" r="1.5" />
+            <circle cx="350" cy="100" r="1" />
+            <circle cx="480" cy="70" r="2" />
+            <circle cx="550" cy="120" r="1.5" />
+          </g>
         </svg>
       </section>
 
+      {/* Right card — Login form */}
       <section className="login-card-wrapper">
-        <div className="card-screen login-card">
-          <a className="brand login-brand">
-            <span className="brand-mark">S</span>
-            <span>SAD <b>Logística</b></span>
-          </a>
-          <p className="eyebrow">PORTAL DE AGENDAMENTO</p>
-          <h1>{mode === 'login' ? 'Entre na sua conta' : 'Crie seu acesso'}</h1>
-          <p className="muted">Acesse para consultar horários e organizar suas descargas.</p>
+        <div className="card login-card">
+          <div className="login-header">
+            <a className="brand login-brand" href="#" aria-label="REVEST SAD - Início">
+              <span className="brand-mark">R</span>
+              <span className="brand-text">SAD <strong>Logística</strong></span>
+            </a>
+            <p className="label">Portal de agendamento</p>
+          </div>
+          <h1>{mode === 'login' ? 'Acessar conta' : 'Criar conta'}</h1>
+          <p className="muted">Use seu e-mail corporativo para entrar no dashboard.</p>
           <form onSubmit={submit} className="form-stack">
-            {mode === 'register' && <label><span>Nome da empresa</span><input name="companyName" type="text" autoComplete="organization" minLength={2} maxLength={200} placeholder="Sua empresa" required /></label>}
-            <label>
-              <span>E-mail</span>
-              <input name="email" type="email" placeholder="contato@empresa.com" autoComplete="username" maxLength={254} required />
-            </label>
-            <label>
-              <span>Senha</span>
-              <input name="password" type="password" placeholder="Mínimo de 12 caracteres" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'register' ? 12 : undefined} maxLength={256} required />
-            </label>
-            {mode === 'login' && <div className="login-row-options">
-              <label className="checkbox-label"><input type="checkbox" name="remember" defaultChecked /> Lembrar-me</label>
-              <a href="#recuperar" onClick={e => { e.preventDefault(); alert('Contate o suporte ou o administrador da empresa.'); }} className="text-link-subtle">Esqueceu a senha?</a>
-            </div>}
+            {mode === 'register' && (
+              <label className="label">Nome da empresa<input name="companyName" type="text" autoComplete="organization" minLength={2} maxLength={200} placeholder="Sua empresa" required /></label>
+            )}
+            <label className="label">E-mail<input name="email" type="email" placeholder="contato@empresa.com" autoComplete="username" maxLength={254} required /></label>
+            <label className="label">Senha<input name="password" type="password" placeholder="Mínimo 12 caracteres" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'register' ? 12 : undefined} maxLength={256} required /></label>
+            {mode === 'login' && (
+              <div className="login-options">
+                <label className="checkbox-label"><input type="checkbox" name="remember" defaultChecked /> Lembrar-me</label>
+                <a href="#recuperar" onClick={e => { e.preventDefault(); alert('Contate o suporte ou o administrador da empresa.'); }}>Esqueceu a senha?</a>
+              </div>
+            )}
             {error && <div className="alert alert-error" role="alert">{error}</div>}
-            <button className="button button-primary button-full" disabled={submitting}>{submitting ? 'Criando cadastro…' : mode === 'login' ? 'Entrar' : 'Criar conta'}</button>
+            <button className="button button-primary button-full" disabled={submitting} type="submit">
+              {submitting ? (mode === 'login' ? 'Entrando…' : 'Criando conta…') : mode === 'login' ? 'Entrar' : 'Criar conta'}
+            </button>
           </form>
-          <p className="login-help">{mode === 'login' ? 'Ainda não tem acesso? ' : 'Já tem uma conta? '}<button className="login-mode-toggle" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Cadastre sua empresa' : 'Entrar'}</button></p>
+          <p className="login-switch">{mode === 'login' ? 'Não tem acesso? ' : 'Já tem conta? '}<button type="button" className="button button-quiet" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Cadastrar empresa' : 'Entrar'}</button></p>
         </div>
       </section>
     </main>
