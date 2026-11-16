@@ -9,7 +9,7 @@ services:
       - key: STORAGE_DRIVER
         value: local
       - key: TOKEN_SECRET
-        generateValue: true
+        value: KUxD5F+5xrF2WEDoBnhtT+rJWFVdF7GemAzppmikbs4=
       - key: DATABASE_URL
         value: ${sad-logistica-db.DATABASE_URL}
 
