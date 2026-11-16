@@ -11,7 +11,9 @@ services:
       - key: TOKEN_SECRET
         value: 7dKeYRQo6BX0KprNyBhl7nzeUpS1fn1fRAAK81PH+64=
       - key: DATABASE_URL
-        value: ${sad-logistica-db.DATABASE_URL}
+        fromDatabase:
+          name: sad-logistica-db
+          property: connectionString
 
 databases:
   - name: sad-logistica-db
