@@ -1058,8 +1058,66 @@
   .company-overview { grid-template-columns: 1fr; }
   .slot-grid { grid-template-columns: repeat(2, 1fr); }
   .calendar-grid { gap: var(--space-1); padding: var(--space-2); }
-  .calendar-day { min-height: 64px; padding: var(--space-2); }
-  .calendar-day-number { font-size: var(--text-base); }
+  .calendar-day { min-height: 56px; padding: var(--space-1); }
+  .calendar-day-number { font-size: var(--text-sm); }
+  .calendar-day-status { font-size: 9px; }
+  .calendar-availability-count { font-size: 9px; }
+  .calendar-weekday { font-size: 9px; padding: var(--space-1) 0; }
+
+  /* Mobile calendar: show abbreviated weekday names */
+  .calendar-weekday::before {
+    content: attr(data-abbr);
+  }
+
+  .slot-card { min-height: 64px; padding: var(--space-2); }
+  .slot-card-time { font-size: var(--text-lg); }
+  .slot-card-capacity { font-size: var(--text-xs); }
+
+  /* Table responsive - card layout */
+  .table-wrap { border: none; background: transparent; overflow-x: visible; }
+  .table { display: block; }
+  .table thead { display: none; }
+  .table tbody { display: flex; flex-direction: column; gap: var(--space-2); }
+  .table tr {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-1) 0;
+    border: none;
+    gap: var(--space-2);
+  }
+  .table td::before {
+    content: attr(data-label);
+    font-size: var(--text-xs);
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+
+  .row-actions { width: 100%; justify-content: flex-start; }
+  .booking-filter-toolbar { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .booking-search { grid-column: 1 / -1; }
+
+  .booking-stepper { gap: var(--space-1); }
+  .step-label { font-size: 9px; }
+
+  .upload-dropzone { min-height: 60px; padding: var(--space-2); }
+  .document-upload-section h3 { font-size: var(--text-sm); }
+
+  .panel { padding: var(--space-4); }
+  .panel-title { font-size: var(--text-base); }
+
+  .page-title { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+  .page-title-actions { width: 100%; }
+  .page-title-actions .button { width: 100%; }
 }
 
 @media (max-width: 480px) {
@@ -1067,6 +1125,12 @@
   .slot-grid { grid-template-columns: 1fr; }
   .login-card { padding: var(--space-5) var(--space-4); }
   .login-copy h1 { font-size: var(--text-4xl); }
+
+  .calendar-day { min-height: 48px; }
+  .calendar-day-number { font-size: var(--text-xs); }
+  .booking-stepper li { flex-basis: 0; }
+  .step-number { width: 24px; height: 24px; font-size: 9px; }
+  .step-label { font-size: 8px; }
 }
 
 /* ===== SCROLL ANIMATIONS ===== */

@@ -636,22 +636,38 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
         <>
           <PageTitle eyebrow="PORTAL DA EMPRESA" title="Agendar descarga" description="Escolha uma data e um horário com capacidade disponível." />
           <Panel title="Disponibilidade">
-            <div className="booking-calendar-toolbar">
-              <strong>{new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(agendaMonth)}</strong>
+            <div className="calendar-toolbar">
+              <span className="calendar-month">{new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(agendaMonth)}</span>
               <div className="calendar-actions">
                 <button className="button button-quiet" aria-label="Mês anterior" onClick={() => setAgendaMonth(new Date(agendaYear, agendaMonthIndex - 1, 1))}>‹</button>
                 <button className="button button-secondary" onClick={() => { const today = new Date(); setAgendaMonth(new Date(today.getFullYear(), today.getMonth(), 1)); setSelectedDate(dateValue(today)); }}>Hoje</button>
                 <button className="button button-quiet" aria-label="Próximo mês" onClick={() => setAgendaMonth(new Date(agendaYear, agendaMonthIndex + 1, 1))}>›</button>
               </div>
             </div>
-            <div className="booking-calendar-grid" role="grid" aria-label="Calendário de agendamento">
-              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((label, index) => <span className="booking-calendar-weekday" role="columnheader" key={`${label}-${index}`}>{label}</span>)}
+            <div className="calendar-legend" aria-label="Legenda de disponibilidade">
+              <span className="legend-item"><i className="legend-dot available" />Disponível</span>
+              <span className="legend-item"><i className="legend-dot partial" />Parcial</span>
+              <span className="legend-item"><i className="legend-dot full" />Lotado</span>
+              <span className="legend-item"><i className="legend-dot closed" />Sem atendimento</span>
+            </div>
+            <div className="calendar-grid" role="grid" aria-label="Calendário de agendamento">
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((label, index) => <div className="calendar-weekday" role="columnheader" key={`${label}-${index}`} data-abbr={label}>{label}</div>)}
               {agendaDates.map(date => {
                 const key = dateValue(date);
                 const day = slotsData.days.find(item => item.date === key);
                 const inMonth = date.getMonth() === agendaMonthIndex;
                 const available = (day?.remaining ?? 0) > 0;
-                return <button key={key} type="button" role="gridcell" aria-pressed={selectedDate === key} aria-label={`${key}${available ? `, ${day?.remaining} vagas` : ', sem horários disponíveis'}`} className={`booking-calendar-day ${inMonth ? '' : 'outside-month'} ${selectedDate === key ? 'selected' : ''} ${available ? 'has-availability' : ''}`} onClick={() => { if (!inMonth) setAgendaMonth(new Date(date.getFullYear(), date.getMonth(), 1)); setSelectedDate(key); setSelected(''); }}><span>{date.getDate()}</span>{available && <i aria-hidden="true" />}</button>;
+                const status = day?.status ?? 'no-schedule';
+                const statusLabels = {
+                  'no-schedule': 'Sem agenda',
+                  'no-service': 'Sem atendimento',
+                  closed: 'Exceção fechada',
+                  available: 'Disponível',
+                  partial: 'Parcialmente ocupada',
+                  full: 'Lotada',
+                  blocked: 'Bloqueado'
+                };
+                return <button key={key} type="button" role="gridcell" aria-pressed={selectedDate === key} aria-label={`${key}: ${statusLabels[status]}, ${day?.remaining ?? 0} vagas`} className={`calendar-day ${inMonth ? '' : 'outside-month'} ${selectedDate === key ? 'selected-day' : ''} ${status === 'available' || status === 'partial' ? 'has-availability' : ''} day-${status}`} onClick={() => { if (!inMonth) setAgendaMonth(new Date(date.getFullYear(), date.getMonth(), 1)); setSelectedDate(key); setSelected(''); }}><span className="calendar-day-number">{date.getDate()}</span><span className="calendar-day-status">{statusLabels[status]}</span>{day?.slots.length ? <span className="calendar-availability-count">{day.remaining}/{day.capacity} vagas</span> : null}</button>;
               })}
             </div>
             <p className="muted small booking-calendar-hint">Dias com ponto têm horários disponíveis. Selecione uma data para ver as vagas.</p>
@@ -1128,12 +1144,12 @@ function BookingTable({ bookings, onDetails, onCancel, onReschedule }: { booking
         <tbody>
           {bookings.map(b => (
             <tr key={b.id}>
-              <td><b>{b.protocol}</b></td>
-              <td>{fmt(b.starts_at)}</td>
-              <td>{b.company_name ?? '—'}</td>
-              <td>{b.plate}</td>
-              <td><span className={`pill ${b.status}`}>{bookingStatusLabel(b.status)}</span></td>
-              <td>
+              <td data-label="Protocolo"><b>{b.protocol}</b></td>
+              <td data-label="Data e hora">{fmt(b.starts_at)}</td>
+              <td data-label="Empresa">{b.company_name ?? '—'}</td>
+              <td data-label="Caminhão">{b.plate}</td>
+              <td data-label="Status"><span className={`pill ${b.status}`}>{bookingStatusLabel(b.status)}</span></td>
+              <td data-label="Documentos">
                 <div className="row-actions">
                   <button className="btn-download-xml" title="Baixar XML da NF" onClick={() => void downloadBookingDocument(b, 'xml')}>
                     XML
@@ -1143,7 +1159,7 @@ function BookingTable({ bookings, onDetails, onCancel, onReschedule }: { booking
                   </button>
                 </div>
               </td>
-              <td>
+              <td data-label="Ações">
                 <div className="row-actions">
                   <button onClick={() => onDetails(b.id)}>Detalhes</button>
                   {b.status === 'confirmed' && (
@@ -1540,15 +1556,19 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
                   <tbody>
                     {(dashboardData?.nextBookings ?? []).map(booking => (
                       <tr key={booking.id}>
-                        <td><b>{booking.protocol}</b></td><td>{booking.company_name}</td><td>{fmt(booking.starts_at, booking.timezone)}</td>
-                        <td>{booking.plate}</td><td>{booking.driver_name}</td><td><span className={`pill ${booking.status}`}>{bookingStatusLabel(booking.status)}</span></td>
-                        <td>
+                        <td data-label="Protocolo"><b>{booking.protocol}</b></td>
+                        <td data-label="Empresa">{booking.company_name}</td>
+                        <td data-label="Data e horário">{fmt(booking.starts_at, booking.timezone)}</td>
+                        <td data-label="Caminhão">{booking.plate}</td>
+                        <td data-label="Motorista">{booking.driver_name}</td>
+                        <td data-label="Status"><span className={`pill ${booking.status}`}>{bookingStatusLabel(booking.status)}</span></td>
+                        <td data-label="Documentos">
                           <div className="row-actions">
                             <button className="btn-download-xml" title="Baixar XML" onClick={() => void downloadBookingDocument(booking as any, 'xml')}>XML</button>
                             <button className="btn-download-pdf" title={hasFiscalDocument(booking, 'pdf') ? 'Baixar PDF' : 'PDF não anexado'} disabled={!hasFiscalDocument(booking, 'pdf')} onClick={() => void downloadBookingDocument(booking as any, 'pdf')}>PDF</button>
                           </div>
                         </td>
-                        <td><button className="button button-quiet" onClick={() => void detail(booking.id)}>Detalhes</button></td>
+                        <td data-label="Ação"><button className="button button-quiet" onClick={() => void detail(booking.id)}>Detalhes</button></td>
                       </tr>
                     ))}
                   </tbody>
