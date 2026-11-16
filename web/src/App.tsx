@@ -442,8 +442,8 @@ function Panel({ title, children, className = '' }: { title?: string; children: 
 
 function MetricCard({ icon, label, value, note }: { icon: string; label: string; value: string; note: string }) {
   return (
-    <div className="metric-card">
-      <span className="metric-icon yellow-box"><SADIcon name={icon} size={20} /></span>
+    <div className="metric-card metric-card-compact">
+      <span className="metric-icon yellow-box-sm"><SADIcon name={icon} size={16} /></span>
       <div className="metric-data">
         <p className="metric-label">{label}</p>
         <strong className="metric-value">{value}</strong>
@@ -621,16 +621,11 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
       {section === 'home' && (
         <div className="company-home">
           <PageTitle eyebrow="INÍCIO" title={companyProfile?.name ?? 'Sua empresa'} description="Consulte os dias disponíveis e acompanhe os dados da sua operação." action={<button className="button button-primary" onClick={() => onNavigate('agenda')}>Novo agendamento</button>} />
-          <div className="company-overview">
-            <Panel title="Dados da empresa" className="company-summary-card">
-              <div className="company-summary-name"><span className="company-summary-icon">{(companyProfile?.name ?? 'E').slice(0, 1).toUpperCase()}</span><div><strong>{companyProfile?.name ?? 'Carregando empresa...'}</strong><small>{companyProfile?.active ? 'Cadastro ativo' : 'Situação da empresa'}</small></div></div>
-              <div className="company-fleet-counts"><div><span>Caminhões</span><strong>{trucks.length}</strong></div><div><span>Motoristas</span><strong>{drivers.length}</strong></div></div>
-              <button className="text-link" onClick={() => onNavigate('cadastro')}>Gerenciar cadastros →</button>
-            </Panel>
-            <Panel title="Agendamentos">
-              <p className="muted">Confira as datas liberadas para descarga e consulte os horários disponíveis.</p>
-              <button className="button button-primary" onClick={() => onNavigate('agenda')}>Ver horários e agendar</button>
-            </Panel>
+          <div className="metrics-grid">
+            <MetricCard icon="bookings" label="Agendamentos de hoje" value={bookings.filter(b => b.starts_at.slice(0,10) === dateValue(new Date()) && b.status === 'confirmed').length.toString()} note="confirmados" />
+            <MetricCard icon="agenda" label="Vagas disponíveis" value={slotsData.slots.filter(s => s.status !== 'blocked' && s.status !== 'full' && new Date(s.startsAt).toDateString() === new Date().toDateString()).reduce((a,s) => a + (s.remaining ?? 0), 0).toString()} note="para hoje" />
+            <MetricCard icon="trucks" label="Caminhões cadastrados" value={trucks.length.toString()} note="todas as empresas" />
+            <MetricCard icon="drivers" label="Motoristas cadastrados" value={drivers.length.toString()} note="todas as empresas" />
           </div>
           <div className="company-home-calendar"><AppointmentsCalendar refresh={refresh} onDetails={showDetails} /></div>
           {details && <BookingDetails detail={details} onClose={() => setDetails(null)} onDeleteDocument={async id => { await api(`/api/v1/bookings/${details.booking.id}/documents/${id}`, { method: 'DELETE' }); await showDetails(details.booking.id); onNotice('Documento removido e registrado na auditoria.'); }} />}
@@ -1531,7 +1526,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
       {section === 'home' && (
         <div className="admin-dashboard">
           <PageTitle eyebrow="VISÃO GERAL" title="Dashboard" description="Acompanhe a operação e a disponibilidade da agenda." action={<button className="button button-secondary" onClick={() => { setRefresh(value => value + 1); void loadDashboard(); }}>↻ Atualizar</button>} />
-          <div className="dashboard-metrics">
+          <div className="metrics-grid">
             <MetricCard icon="bookings" label="Agendamentos de hoje" value={dashboardData ? String(dashboardData.metrics.bookings_today) : '—'} note="confirmados" />
             <MetricCard icon="agenda" label="Vagas disponíveis" value={dashboardData ? String(dashboardData.metrics.available_slots_today) : '—'} note="para hoje" />
             <MetricCard icon="trucks" label="Caminhões cadastrados" value={dashboardData ? String(dashboardData.metrics.trucks_total) : '—'} note="todas as empresas" />
