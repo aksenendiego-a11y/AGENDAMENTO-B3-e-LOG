@@ -14,6 +14,6 @@ const paths: Record<string, ReactNode> = {
   invoices: <><path d="M6 3h8l5 5v13H6z" /><path d="M14 3v5h5M9 13h7M9 17h7" /></>,
 };
 
-export function SADIcon({ name, size = 18 }: { name: string; size?: number }) {
+export function SADIcon({ name, size = 16 }: { name: string; size?: number }) {
   return <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name] ?? paths.home}</svg>;
 }
