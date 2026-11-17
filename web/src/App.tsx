@@ -61,7 +61,10 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const response = await fetch(url, { ...init, headers });
+
+  // Direciona as chamadas de API para o backend no Render
+  const backendUrl = 'https://agendamento-b3-e-log-1.onrender.com';
+  const response = await fetch(`${backendUrl}${url}`, { ...init, headers });
   if (response.status === 401) { bearer = ''; window.dispatchEvent(new Event('sad-session-expired')); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
