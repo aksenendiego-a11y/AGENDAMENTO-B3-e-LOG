@@ -215,7 +215,18 @@ app.get('/api/v1/availability', auth, asyncRoute(async (req, res) => {
     if (effectiveTo && effectiveTo < localDate) continue;
     configurationFound = true;
     const exception = await pool.query('SELECT blocked,windows FROM schedule_exceptions WHERE config_id=$1 AND local_date=$2', [schedule.id, localDate]);
-    const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : (schedule.windows ?? []) as OperatingWindow[];
+    const exceptionRaw = exception.rowCount ? exception.rows[0].windows : null;
+    const configRaw = schedule.windows;
+
+    const normalize = (w: any): OperatingWindow[] => {
+      if (!w) return [];
+      if (Array.isArray(w) && w.length > 0 && typeof w[0] === 'object' && 'weekday' in w[0]) {
+         return w.flatMap((item: any) => item.windows || []);
+      }
+      return w as OperatingWindow[];
+    };
+
+    const windows = exceptionRaw ? normalize(exceptionRaw) : normalize(configRaw);
     const blocked = Boolean(exception.rowCount && exception.rows[0].blocked);
     const daySummary = days.get(localDate)!;
     daySummary.configured = true; daySummary.timezone = schedule.timezone; daySummary.blocked = blocked;
