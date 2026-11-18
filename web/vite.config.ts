@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/',
+  base: '/AGENDAMENTO-B3-e-LOG/',
   server: { proxy: { '/api': { target: 'http://127.0.0.1:3100', changeOrigin: false } } },
   build: {
     outDir: 'dist',
