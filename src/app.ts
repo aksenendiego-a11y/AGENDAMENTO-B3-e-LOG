@@ -156,8 +156,8 @@ app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, r
   } catch (error: unknown) {
     await client.query('ROLLBACK');
     if ((error as { code?: string }).code === '23505') return res.status(409).json({ error: 'Já existe uma configuração com essa vigência' });
-    const detail = process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'unknown error') : undefined;
-    return res.status(500).json({ error: 'Erro interno ao publicar configuração', ...(detail ? { detail } : {}) });
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    return res.status(500).json({ error: 'Erro interno ao publicar configuração', detail });
   } finally { client.release(); }
 }));
 
