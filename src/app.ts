@@ -135,20 +135,14 @@ app.get('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (_req, r
 
 app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, res) => {
   const windowSchema = z.object({ start: z.string(), end: z.string(), durationMinutes: z.number().int().positive().max(1440), capacity: z.number().int().positive() });
-  const input = z.object({ timezone: z.string().min(1).max(100), effectiveFrom: z.string(), effectiveTo: z.string().optional(), weeklyRules: z.array(z.object({ weekday: z.number().int().min(1).max(7), windows: z.array(windowSchema) })).max(7) }).safeParse(req.body);
-  if (!input.success || (input.success && (!isIsoDate(input.data.effectiveFrom) || (input.data.effectiveTo !== undefined && !isIsoDate(input.data.effectiveTo))))) return res.status(400).json({ error: 'Configuração de calendário inválida', details: input.success ? undefined : input.error.flatten().fieldErrors });
-  if (input.data.effectiveTo && input.data.effectiveTo < input.data.effectiveFrom) return res.status(400).json({ error: 'A data final da vigência deve ser igual ou posterior à inicial' });
-  if (!input.data.weeklyRules.some(rule => rule.windows.length > 0)) return res.status(400).json({ error: 'Adicione ao menos uma faixa de horário antes de publicar a agenda' });
+  const input = z.object({ timezone: z.string().min(1).max(100), effectiveFrom: z.string(), effectiveTo: z.string(), windows: z.array(windowSchema).min(1) }).safeParse(req.body);
+  if (!input.success || (input.success && (!isIsoDate(input.data.effectiveFrom) || !isIsoDate(input.data.effectiveTo)))) return res.status(400).json({ error: 'Configuração de calendário inválida', details: input.success ? undefined : input.error.flatten().fieldErrors });
+  if (input.data.effectiveTo < input.data.effectiveFrom) return res.status(400).json({ error: 'A data final da vigência deve ser posterior à inicial' });
   if (!DateTime.now().setZone(input.data.timezone).isValid) return res.status(400).json({ error: 'Fuso horário IANA inválido' });
   const today = DateTime.now().setZone(input.data.timezone).toISODate()!;
   if (input.data.effectiveFrom < today) return res.status(400).json({ error: 'A vigência não pode começar no passado' });
-  const seenWeekdays = new Set<number>();
-  try {
-    for (const rule of input.data.weeklyRules) {
-      if (seenWeekdays.has(rule.weekday)) return res.status(400).json({ error: 'Não repita dias da semana' });
-      seenWeekdays.add(rule.weekday); validateOperatingWindows(rule.windows);
-    }
-  } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Faixa inválida' }); }
+  try { validateOperatingWindows(input.data.windows); }
+  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Faixa inválida' }); }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -157,9 +151,8 @@ app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, r
     if (latest.rows[0].effective_from && input.data.effectiveFrom <= DateTime.fromJSDate(new Date(latest.rows[0].effective_from)).toISODate()!) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Uma nova versão deve ter vigência posterior à configuração mais recente' }); }
     const existing = await client.query("SELECT 1 FROM bookings b JOIN schedule_slots s ON s.id=b.slot_id WHERE b.status='confirmed' AND (s.local_date >= $1 OR s.starts_at >= (($1::date)::timestamp AT TIME ZONE $2)) LIMIT 1", [input.data.effectiveFrom, input.data.timezone]);
     if (existing.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Há reservas confirmadas a partir da vigência. Escolha uma data posterior à última reserva.' }); }
-    const result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,end_date,weekly_rules,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,timezone,effective_from,end_date,weekly_rules,created_at', [input.data.timezone, input.data.effectiveFrom, input.data.effectiveTo ?? null, JSON.stringify(input.data.weeklyRules), req.session!.sub]);
-    await client.query("UPDATE schedule_slots SET blocked=true WHERE local_date >= $1 OR (config_id IS NULL AND starts_at >= (($1::date)::timestamp AT TIME ZONE $2))", [input.data.effectiveFrom, input.data.timezone]);
-    await audit(req.session!.sub, 'calendar.configuration.created', 'schedule_config', result.rows[0].id, { effectiveFrom: input.data.effectiveFrom, effectiveTo: input.data.effectiveTo ?? null }, client);
+    const result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,end_date,windows,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,timezone,effective_from,end_date,windows,created_at', [input.data.timezone, input.data.effectiveFrom, input.data.effectiveTo, JSON.stringify(input.data.windows), req.session!.sub]);
+    await audit(req.session!.sub, 'calendar.configuration.created', 'schedule_config', result.rows[0].id, { effectiveFrom: input.data.effectiveFrom, effectiveTo: input.data.effectiveTo }, client);
     await client.query('COMMIT');
     return res.status(201).json({ configuration: result.rows[0] });
   } catch (error: unknown) {
@@ -217,15 +210,14 @@ app.get('/api/v1/availability', auth, asyncRoute(async (req, res) => {
   for (let day = startDay; day <= endDay; day = day.plus({ days: 1 })) {
     const localDate = day.toISODate()!;
     days.set(localDate, { date: localDate, timezone: null, configured: false, blocked: false, capacity: 0, occupied: 0, remaining: 0, bookingCount: 0, status: 'no-schedule', slots: [], bookings: [] });
-    const config = await pool.query('SELECT id,timezone,weekly_rules,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
+    const config = await pool.query('SELECT id,timezone,windows,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
     if (!config.rowCount) continue;
     const schedule = config.rows[0];
     const effectiveTo = dateOnly(schedule.end_date);
     if (effectiveTo && effectiveTo < localDate) continue;
     configurationFound = true;
     const exception = await pool.query('SELECT blocked,windows FROM schedule_exceptions WHERE config_id=$1 AND local_date=$2', [schedule.id, localDate]);
-    const rule = (schedule.weekly_rules as Array<{ weekday: number; windows: OperatingWindow[] }>).find(item => item.weekday === day.weekday);
-    const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : rule?.windows ?? [];
+    const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : (schedule.windows ?? []) as OperatingWindow[];
     const blocked = Boolean(exception.rowCount && exception.rows[0].blocked);
     const daySummary = days.get(localDate)!;
     daySummary.configured = true; daySummary.timezone = schedule.timezone; daySummary.blocked = blocked;
