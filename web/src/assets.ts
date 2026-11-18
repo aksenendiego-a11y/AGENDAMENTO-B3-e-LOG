@@ -1,3 +1,3 @@
-import logo from '../public/assets/logo.png';
-import login from '../public/assets/login.png';
+import logo from './assets/logo.png';
+import login from './assets/login.png';
 export { logo, login };
