@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { B3_SYMBOLS, B3_TRADING_HOURS } from '../config/constants';
+import { B3_SYMBOLS } from '../config/constants';
 
 export interface AgendamentoAttachment {
   agendamentoId: string;

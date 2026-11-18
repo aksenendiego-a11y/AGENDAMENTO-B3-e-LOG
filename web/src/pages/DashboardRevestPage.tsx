@@ -1,14 +1,11 @@
-import { useState } from 'react';
+import { logo, login as loginImage } from '../assets';
 
 export function DashboardRevestPage() {
-  const [selectedDate, setSelectedDate] = useState(16);
-
   return (
     <div className="revest-dashboard">
       <header className="revest-header">
         <div className="revest-logo">
-          <strong>REVEST</strong>
-          <small>ACABAMENTOS</small>
+          <img src={logo} alt="REVEST" style={{ height: '40px' }} />
         </div>
         <div className="revest-user">
           <span>🔔</span>
@@ -33,7 +30,7 @@ export function DashboardRevestPage() {
         <main className="revest-main">
           <div className="dashboard-grid">
             <section className="hero-login">
-              <img src="https://via.placeholder.com/600x400?text=REVEST+Acabamentos" alt="Truck"/>
+              <img src={loginImage} alt="Caminhões REVEST" style={{ width: '100%', borderRadius: '8px' }}/>
               <div className="login-card">
                 <h4>Entrar na sua conta</h4>
                 <input placeholder="E-mail ou CNPJ"/>

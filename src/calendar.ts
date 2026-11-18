@@ -6,10 +6,8 @@ export interface ScheduleConfig {
   id: string;
   timezone: string;
   effective_from: string;
-  weekly_rules?: any[];
-  rule_type?: 'weekly' | 'range';
-  start_date?: string;
-  end_date?: string;
+  end_date: string;
+  windows: OperatingWindow[];
 }
 
 function localDateTime(date: string, time: string, zone: string): DateTime {

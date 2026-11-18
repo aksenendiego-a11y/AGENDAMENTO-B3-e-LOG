@@ -56,16 +56,14 @@ async function isCurrentConfiguredSlot(slot: { config_id: string | null; local_d
   if (!slot.config_id) return true;
   if (!slot.local_date || !slot.timezone) return false;
   const localDate = slot.local_date instanceof Date ? DateTime.fromJSDate(slot.local_date, { zone: 'UTC' }).toISODate()! : String(slot.local_date).slice(0, 10);
-  const current = await client.query('SELECT id,timezone,weekly_rules,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
+  const current = await client.query('SELECT id,timezone,windows,end_date FROM schedule_configs WHERE effective_from <= $1 ORDER BY effective_from DESC LIMIT 1', [localDate]);
   if (!current.rowCount || current.rows[0].id !== slot.config_id) return false;
   const config = current.rows[0];
   const effectiveTo = dateOnly(config.end_date);
   if (effectiveTo && effectiveTo < localDate) return false;
   const exception = await client.query('SELECT blocked,windows FROM schedule_exceptions WHERE config_id=$1 AND local_date=$2', [config.id, localDate]);
   if (exception.rowCount && exception.rows[0].blocked) return false;
-  const date = DateTime.fromISO(localDate, { zone: config.timezone });
-  const rule = (config.weekly_rules as Array<{ weekday: number; windows: OperatingWindow[] }>).find(item => item.weekday === date.weekday);
-  const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : rule?.windows ?? [];
+  const windows = exception.rowCount && exception.rows[0].windows ? exception.rows[0].windows as OperatingWindow[] : (config.windows ?? []) as OperatingWindow[];
   const actual = generateSlots(localDate, config.timezone, windows);
   return actual.some(item => new Date(item.startsAt).getTime() === slot.starts_at.getTime() && new Date(item.endsAt).getTime() === slot.ends_at.getTime());
 }
@@ -129,7 +127,7 @@ app.post('/api/v1/auth/register', asyncRoute(async (req, res) => {
 }));
 
 app.get('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (_req, res) => {
-  const result = await pool.query('SELECT id,timezone,effective_from,end_date,weekly_rules,created_at FROM schedule_configs ORDER BY effective_from DESC');
+  const result = await pool.query('SELECT id,timezone,effective_from,end_date,windows,created_at FROM schedule_configs ORDER BY effective_from DESC');
   return res.json({ configurations: result.rows });
 }));
 

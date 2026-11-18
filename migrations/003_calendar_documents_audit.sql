@@ -1,6 +1,7 @@
 CREATE TABLE schedule_configs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), timezone text NOT NULL,
-  effective_from date NOT NULL, weekly_rules jsonb NOT NULL,
+  effective_from date NOT NULL, end_date date NOT NULL,
+  windows jsonb NOT NULL,
   created_by uuid NOT NULL REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (effective_from)
 );

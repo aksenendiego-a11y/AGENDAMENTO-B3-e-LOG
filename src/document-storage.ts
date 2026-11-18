@@ -1,10 +1,9 @@
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 
 export type DocumentStorage = {
-  put(key: string, content: Buffer, contentType: string): Promise<void>;
+  put(key: string, content: Buffer, _contentType: string): Promise<void>;
   get(key: string, maxBytes: number): Promise<Buffer | null>;
   delete(key: string): Promise<void>;
   close(): void;
@@ -34,7 +33,7 @@ class LocalDocumentStorage implements DocumentStorage {
     return resolved;
   }
 
-  async put(key: string, content: Buffer, contentType: string): Promise<void> {
+  async put(key: string, content: Buffer, _contentType: string): Promise<void> {
     const filePath = this.resolve(key, 'upload');
     try {
       await mkdir(this.directory, { recursive: true });

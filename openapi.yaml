@@ -66,28 +66,21 @@ paths:
           application/json:
             schema:
               type: object
-              required: [timezone, effectiveFrom, weeklyRules]
+              required: [timezone, effectiveFrom, effectiveTo, windows]
               properties:
                 timezone: {type: string, example: America/Sao_Paulo}
                 effectiveFrom: {type: string, format: date}
-                effectiveTo: {type: string, format: date, description: Data final inclusiva da vigência; omitida, mantém a configuração sem término}
-                weeklyRules:
+                effectiveTo: {type: string, format: date, description: Data final inclusiva da vigência}
+                windows:
                   type: array
                   items:
                     type: object
-                    required: [weekday, windows]
+                    required: [start, end, durationMinutes, capacity]
                     properties:
-                      weekday: {type: integer, minimum: 1, maximum: 7, description: ISO weekday}
-                      windows:
-                        type: array
-                        items:
-                          type: object
-                          required: [start, end, durationMinutes, capacity]
-                          properties:
-                            start: {type: string, example: '08:00'}
-                            end: {type: string, example: '12:00'}
-                            durationMinutes: {type: integer, minimum: 1}
-                            capacity: {type: integer, minimum: 1}
+                      start: {type: string, example: '08:00'}
+                      end: {type: string, example: '12:00'}
+                      durationMinutes: {type: integer, minimum: 1}
+                      capacity: {type: integer, minimum: 1}
       responses: {'201': {description: Configuração criada}, '400': {description: Configuração inválida}, '409': {description: Conflito com agenda ou reservas}}
   /admin/calendar/exceptions:
     get:

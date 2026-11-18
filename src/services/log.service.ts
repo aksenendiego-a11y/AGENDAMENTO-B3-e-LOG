@@ -3,7 +3,6 @@ import path from 'path';
 import { promisify } from 'util';
 
 const appendFile = promisify(fs.appendFile);
-const writeFile = promisify(fs.writeFile);
 const mkdir = promisify(fs.mkdir);
 
 export interface LogEntry {
@@ -11,7 +10,7 @@ export interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error';
   source: string;
   message: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   stack?: string;
 }
 
@@ -40,7 +39,7 @@ export class LogService {
     }
   }
 
-  async info(source: string, message: string, metadata?: any): Promise<void> {
+  async info(source: string, message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.writeLog({
       timestamp: new Date(),
       level: 'info',
@@ -50,7 +49,7 @@ export class LogService {
     });
   }
 
-  async warn(source: string, message: string, metadata?: any): Promise<void> {
+  async warn(source: string, message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.writeLog({
       timestamp: new Date(),
       level: 'warn',
@@ -60,7 +59,7 @@ export class LogService {
     });
   }
 
-  async error(source: string, message: string, error?: Error, metadata?: any): Promise<void> {
+  async error(source: string, message: string, error?: Error, metadata?: Record<string, unknown>): Promise<void> {
     await this.writeLog({
       timestamp: new Date(),
       level: 'error',
@@ -71,7 +70,7 @@ export class LogService {
     });
   }
 
-  async debug(source: string, message: string, metadata?: any): Promise<void> {
+  async debug(source: string, message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.writeLog({
       timestamp: new Date(),
       level: 'debug',
@@ -120,7 +119,15 @@ export class LogService {
     }
   }
 
-  async getLogSummary(): Promise<any> {
+  async getLogSummary(): Promise<{
+    total: number;
+    info: number;
+    warn: number;
+    error: number;
+    debug: number;
+    oldest: Date | null;
+    newest: Date | null;
+  }> {
     const logs = await this.getLogs(1000);
     const summary = {
       total: logs.length,

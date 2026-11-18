@@ -102,13 +102,11 @@ test('admin configures the calendar and a company books, reschedules, downloads 
   await page.getByLabel('Início da vigência').fill(scheduleDate);
   await page.getByLabel('Fim da vigência').fill(scheduleDate);
   const rule = page.locator('form.rule-form').first();
-  await rule.getByLabel('Dia').selectOption(String(bookingDay.weekday));
   await rule.getByLabel('Abre').fill('10:00');
   await rule.getByLabel('Fecha').fill('11:00');
   await rule.getByLabel('Duração (min)').fill('30');
   await rule.getByLabel('Capacidade').fill('1');
   await rule.getByRole('button', { name: 'Adicionar faixa' }).click();
-  await rule.getByLabel('Dia').selectOption(String(bookingDay.weekday));
   await rule.getByLabel('Abre').fill('11:00');
   await rule.getByLabel('Fecha').fill('12:00');
   await rule.getByLabel('Duração (min)').fill('30');

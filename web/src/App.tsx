@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { AdminLayout } from './admin/layouts/AdminLayout';
 import { SADIcon } from './components/SADIcon';
+import { logo, login as loginImage } from './assets';
 
 type User = { id: string; email: string; role: 'admin' | 'company' };
 type Slot = { id: string; startsAt: string; endsAt: string; timezone: string | null; localDate?: string; capacity: number; occupied: number; remaining?: number; status: string };
@@ -11,7 +12,7 @@ type Company = { id: string; name: string; active: boolean };
 type CompanyProfile = { id: string; name: string; active: boolean };
 type AdminDashboardData = {
   metrics: { bookings_today: number; available_slots_today: number; trucks_total: number; drivers_total: number };
-  nextBookings: Array<{ id: string; protocol: string; status: string; starts_at: string; timezone: string | null; plate: string; driver_name: string; company_name: string; documents?: DocumentMeta[] }>;
+  nextBookings: Array<{ id: string; protocol: string; status: string; starts_at: string; ends_at: string; timezone: string | null; plate: string; driver_name: string; company_name: string; documents?: DocumentMeta[]; invoice_number: string; invoice_series?: string | null; invoice_key?: string | null; notes?: string | null; weight?: string | null; weight_unit?: string | null; created_at?: string }>;
 };
 type DocumentMeta = { id: string; media_type: string; original_name?: string; byte_size?: number; created_at?: string };
 type Booking = {
@@ -54,7 +55,6 @@ type BookingDetailsData = {
   documents: DocumentMeta[];
 };
 type WindowRule = { start: string; end: string; durationMinutes: number; capacity: number };
-type DayWindow = WindowRule & { weekday: number };
 
 let bearer = '';
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://agendamento-b3-e-log-1.onrender.com';
@@ -85,7 +85,6 @@ const bookingStatusLabel = (status: string) => status === 'confirmed' ? 'Confirm
 const hasFiscalDocument = (booking: { documents?: DocumentMeta[] }, type: 'xml' | 'pdf') => booking.documents?.some(document => type === 'pdf'
   ? document.media_type === 'application/pdf' || document.original_name?.toLowerCase().endsWith('.pdf')
   : document.media_type.includes('xml') || document.original_name?.toLowerCase().endsWith('.xml')) ?? false;
-const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 // Função utilitária para baixar XML e DANFE (PDF) de cada agendamento
 async function downloadBookingDocument(booking: { id: string; protocol: string; invoice_number: string; invoice_series?: string | null; invoice_key?: string | null; starts_at: string; ends_at: string; plate: string; driver_name: string; weight?: string | null; weight_unit?: string | null; company_name?: string; notes?: string | null; created_at?: string; documents?: DocumentMeta[]; status?: string }, type: 'xml' | 'pdf', viewInNewTab = false) {
@@ -235,10 +234,7 @@ export function App() {
       {/* Topbar Revest Amarela */}
       <header className="topbar">
         <a className="brand revest-brand" href="#inicio" onClick={e => { e.preventDefault(); setSection('home'); }}>
-          <span className="revest-wordmark">
-            <span>REVEST</span>
-            <small>ACABAMENTOS</small>
-          </span>
+          <img src={logo} alt="REVEST" className="revest-logo-img" style={{ height: '40px' }} />
         </a>
         <span className="system-name">SAD <span>— Agendamento de Descarga</span></span>
 
@@ -326,61 +322,7 @@ function Login({ onLogin, onRegister, error }: { onLogin: (email: string, passwo
           <h1>Agendamento de descarga para operações logísticas</h1>
           <p>Dashboard unificado para gerenciar frota, motoristas, agendamentos e documentos fiscais.</p>
         </div>
-        <svg className="login-trucks" viewBox="0 0 600 320" fill="none" aria-hidden="true" role="img" aria-label="Caminhões REVEST em operação">
-          {/* Ground line */}
-          <line x1="0" y1="280" x2="600" y2="280" stroke="#e2e8f0" strokeWidth="2" />
-          {/* Truck 1 - foreground */}
-          <g transform="translate(60, 160)">
-            {/* Cabin */}
-            <rect x="0" y="0" width="80" height="50" rx="4" fill="#0f172a" />
-            <rect x="80" y="10" width="30" height="40" rx="2" fill="#0f172a" />
-            {/* Windshield */}
-            <path d="M80 10 L95 10 L80 50 Z" fill="#1e293b" opacity="0.8" />
-            {/* Yellow accent stripe */}
-            <rect x="0" y="44" width="110" height="4" fill="#ffd900" />
-            {/* Wheels */}
-            <circle cx="20" cy="58" r="14" fill="#1e293b" stroke="#334155" strokeWidth="2" />
-            <circle cx="20" cy="58" r="6" fill="#0f172a" />
-            <circle cx="90" cy="58" r="14" fill="#1e293b" stroke="#334155" strokeWidth="2" />
-            <circle cx="90" cy="58" r="6" fill="#0f172a" />
-            {/* REVEST logo on side */}
-            <text x="55" y="30" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="11" fontWeight="700" fill="#ffd900" letterSpacing="0.5">REVEST</text>
-          </g>
-          {/* Truck 2 - middle */}
-          <g transform="translate(220, 180)" opacity="0.7">
-            <rect x="0" y="0" width="70" height="45" rx="4" fill="#1e293b" />
-            <rect x="70" y="8" width="25" height="37" rx="2" fill="#1e293b" />
-            <path d="M70 8 L82 8 L70 45 Z" fill="#0f172a" opacity="0.6" />
-            <rect x="0" y="39" width="95" height="3" fill="#ffd900" opacity="0.5" />
-            <circle cx="18" cy="53" r="12" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
-            <circle cx="78" cy="53" r="12" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
-            <text x="47" y="27" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="10" fontWeight="600" fill="#ffd900" opacity="0.6" letterSpacing="0.5">REVEST</text>
-          </g>
-          {/* Truck 3 - background */}
-          <g transform="translate(400, 200)" opacity="0.45">
-            <rect x="0" y="0" width="60" height="40" rx="3" fill="#334155" />
-            <rect x="60" y="6" width="22" height="34" rx="2" fill="#334155" />
-            <path d="M60 6 L72 6 L60 40 Z" fill="#1e293b" opacity="0.4" />
-            <rect x="0" y="35" width="82" height="2" fill="#ffd900" opacity="0.3" />
-            <circle cx="15" cy="48" r="10" fill="#1e293b" stroke="#475569" strokeWidth="1" />
-            <circle cx="65" cy="48" r="10" fill="#1e293b" stroke="#475569" strokeWidth="1" />
-          </g>
-          {/* Dock/warehouse silhouette */}
-          <g transform="translate(0, 240)" opacity="0.15" fill="#0f172a">
-            <rect x="0" y="0" width="600" height="80" />
-            <rect x="100" y="-60" width="80" height="60" rx="4 4 0 0" />
-            <rect x="300" y="-80" width="120" height="80" rx="4 4 0 0" />
-            <rect x="500" y="-50" width="60" height="50" rx="4 4 0 0" />
-          </g>
-          {/* Ambient particles */}
-          <g fill="#ffd900" opacity="0.15">
-            <circle cx="80" cy="80" r="2" />
-            <circle cx="200" cy="60" r="1.5" />
-            <circle cx="350" cy="100" r="1" />
-            <circle cx="480" cy="70" r="2" />
-            <circle cx="550" cy="120" r="1.5" />
-          </g>
-        </svg>
+        <img className="login-showcase-img" src={loginImage} alt="Caminhões REVEST" aria-label="Caminhões REVEST" />
       </section>
 
       {/* Right card — Login form */}
@@ -657,7 +599,6 @@ function CompanyPortal({ section, onNavigate, onError, onNotice }: { section: st
                 const key = dateValue(date);
                 const day = slotsData.days.find(item => item.date === key);
                 const inMonth = date.getMonth() === agendaMonthIndex;
-                const available = (day?.remaining ?? 0) > 0;
                 const status = day?.status ?? 'no-schedule';
                 const statusLabels = {
                   'no-schedule': 'Sem agenda',
@@ -1382,7 +1323,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
   const [exceptions, setExceptions] = useState<Array<Record<string, unknown>>>([]);
   const [details, setDetails] = useState<BookingDetailsData | null>(null);
   const [reschedulingId, setReschedulingId] = useState('');
-  const [windows, setWindows] = useState<DayWindow[]>([]);
+  const [windows, setWindows] = useState<WindowRule[]>([]);
   const [timezone, setTimezone] = useState('America/Sao_Paulo');
   const [effectiveFrom, setEffectiveFrom] = useState(dateValue(new Date()));
   const [effectiveTo, setEffectiveTo] = useState('');
@@ -1436,7 +1377,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
     e.preventDefault();
     const formElement = e.currentTarget;
     const f = new FormData(formElement);
-    setWindows(v => [...v, { weekday: Number(f.get('weekday')), start: String(f.get('start')), end: String(f.get('end')), durationMinutes: Number(f.get('durationMinutes')), capacity: Number(f.get('capacity')) }]);
+    setWindows(v => [...v, { start: String(f.get('start')), end: String(f.get('end')), durationMinutes: Number(f.get('durationMinutes')), capacity: Number(f.get('capacity')) }]);
     formElement.reset();
   };
   const saveCalendar = async () => {
@@ -1448,11 +1389,9 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
       onError('Informe uma data final igual ou posterior à data inicial da vigência.');
       return;
     }
-    const byDay = new Map<number, WindowRule[]>();
-    windows.forEach(({ weekday, ...window }) => byDay.set(weekday, [...(byDay.get(weekday) ?? []), window]));
     setBusy(true);
     try {
-      await api('/api/v1/admin/calendar/configs', json({ timezone, effectiveFrom, effectiveTo, weeklyRules: [...byDay].map(([weekday, dayWindows]) => ({ weekday, windows: dayWindows })) }));
+      await api('/api/v1/admin/calendar/configs', json({ timezone, effectiveFrom, effectiveTo, windows }));
       setWindows([]);
       await loadConfigs();
       onNotice('Configuração de calendário publicada com sucesso.');
@@ -1464,7 +1403,25 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
     const formElement = e.currentTarget;
     const f = new FormData(formElement);
     const blocked = f.get('blocked') === 'on';
-    const payload = { localDate: f.get('localDate'), blocked, ...(!blocked ? { windows: [{ start: f.get('start'), end: f.get('end'), durationMinutes: Number(f.get('durationMinutes')), capacity: Number(f.get('capacity')) }] } : {}) };
+    const payload = {
+      localDate: f.get('localDate'),
+      blocked,
+      ...(!blocked ? {
+        windows: [{
+          start: f.get('start'),
+          end: f.get('end'),
+          durationMinutes: Number(f.get('durationMinutes')),
+          capacity: Number(f.get('capacity'))
+        }]
+      } : {})
+    };
+
+    // Validação básica antes de enviar
+    if (!payload.localDate) { onError('Data é obrigatória.'); return; }
+    if (!blocked && (!payload.windows![0].start || !payload.windows![0].end)) {
+        onError('Horários de início e fim são obrigatórios para exceções não bloqueadas.');
+        return;
+    }
     try {
       await api('/api/v1/admin/calendar/exceptions', json(payload));
       onNotice('Exceção de calendário registrada.');
@@ -1515,14 +1472,6 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
       await loadUsers(usersCompanyId);
     } catch (e) { onError((e as Error).message); }
   };
-  const changeUserPassword = async (userId: string) => {
-    const newPassword = window.prompt('Nova senha (mínimo 12 caracteres):');
-    if (!newPassword || newPassword.length < 12) { if (newPassword) onError('Senha muito curta.'); return; }
-    try {
-      await api(`/api/v1/admin/users/${userId}/password`, json({ newPassword }));
-      onNotice('Senha alterada com sucesso.');
-    } catch (e) { onError((e as Error).message); }
-  };
   const detail = async (id: string) => {
     try { setDetails(await api(`/api/v1/bookings/${id}`)); }
     catch (e) { onError((e as Error).message); }
@@ -1565,8 +1514,8 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
                         <td data-label="Status"><span className={`pill ${booking.status}`}>{bookingStatusLabel(booking.status)}</span></td>
                         <td data-label="Documentos">
                           <div className="row-actions">
-                            <button className="btn-download-xml" title="Baixar XML" onClick={() => void downloadBookingDocument(booking as any, 'xml')}>XML</button>
-                            <button className="btn-download-pdf" title={hasFiscalDocument(booking, 'pdf') ? 'Baixar PDF' : 'PDF não anexado'} disabled={!hasFiscalDocument(booking, 'pdf')} onClick={() => void downloadBookingDocument(booking as any, 'pdf')}>PDF</button>
+                            <button className="btn-download-xml" title="Baixar XML" onClick={() => void downloadBookingDocument(booking, 'xml')}>XML</button>
+                            <button className="btn-download-pdf" title={hasFiscalDocument(booking, 'pdf') ? 'Baixar PDF' : 'PDF não anexado'} disabled={!hasFiscalDocument(booking, 'pdf')} onClick={() => void downloadBookingDocument(booking, 'pdf')}>PDF</button>
                           </div>
                         </td>
                         <td data-label="Ação"><button className="button button-quiet" onClick={() => void detail(booking.id)}>Detalhes</button></td>
@@ -1597,7 +1546,6 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
               </fieldset>
             </div>
             <form className="rule-form schedule-window-form" onSubmit={addWindow}>
-              <label>Dia<select name="weekday">{[1, 2, 3, 4, 5, 6, 7].map(d => <option key={d} value={d}>{weekdayNames[d % 7]}</option>)}</select></label>
               <label>Abre<input name="start" type="time" required /></label>
               <label>Fecha<input name="end" type="time" required /></label>
               <label>Duração (min)<input name="durationMinutes" type="number" min="1" required /></label>
@@ -1609,7 +1557,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
                 <ul className="simple-list">
                   {windows.map((w, i) => (
                     <li key={i}>
-                      {weekdayNames[w.weekday % 7]} · {w.start}–{w.end} · {w.durationMinutes} min · {w.capacity} caminhões
+                      {w.start}–{w.end} · {w.durationMinutes} min · {w.capacity} caminhões
                       <button className="danger-link" onClick={() => setWindows(v => v.filter((_, index) => index !== i))}>Remover</button>
                     </li>
                   ))}
@@ -1632,7 +1580,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
             </form>
           </Panel>
           <Panel title="Configurações publicadas">
-            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente de {String(configuration.effective_from ?? '').slice(0, 10)} a {configuration.end_date ? String(configuration.end_date).slice(0, 10) : 'sem data final'}</span></summary><pre>{JSON.stringify(configuration.weekly_rules, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
+            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente de {String(configuration.effective_from ?? '').slice(0, 10)} a {String(configuration.end_date ?? '').slice(0, 10)}</span></summary><pre>{JSON.stringify(configuration.windows, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
           </Panel>
         </div>
       )}

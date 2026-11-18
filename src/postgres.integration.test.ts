@@ -262,7 +262,7 @@ function makeValidPdf(): Buffer {
   it('generates recurring slots in the configured timezone and applies dated exceptions', async () => {
     const effective = DateTime.now().setZone('America/Sao_Paulo').plus({ days: 10 }).toISODate()!;
     const date = DateTime.fromISO(effective, { zone: 'America/Sao_Paulo' });
-    const configured = await fetch(`${baseUrl}/admin/calendar/configs`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ timezone: 'America/Sao_Paulo', effectiveFrom: effective, weeklyRules: [{ weekday: date.weekday, windows: [{ start: '10:00', end: '11:00', durationMinutes: 30, capacity: 2 }] }] }) });
+    const configured = await fetch(`${baseUrl}/admin/calendar/configs`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ timezone: 'America/Sao_Paulo', effectiveFrom: effective, effectiveTo: effective, windows: [{ start: '10:00', end: '11:00', durationMinutes: 30, capacity: 2 }] }) });
     expect(configured.status).toBe(201);
     const availabilityUrl = `${baseUrl}/availability?from=${effective}&to=${effective}`;
     const available = await fetch(availabilityUrl, { headers: { authorization: `Bearer ${token}` } }).then(r => r.json()) as { configured: boolean; slots: Array<{ id: string; startsAt: string; timezone: string; status: string }> };
@@ -285,7 +285,7 @@ function makeValidPdf(): Buffer {
     expect(monthlySummary.days.find(day => day.date === nextOccurrence)?.bookings[0].protocol).toMatch(/^SAD-/);
   });
 
-  it('limits weekly configuration availability to its inclusive effective date range', async () => {
+  it('limits configuration availability to its inclusive effective date range', async () => {
     const effectiveDate = DateTime.now().setZone('America/Sao_Paulo').plus({ days: 40 });
     const effectiveFrom = effectiveDate.toISODate()!;
     const effectiveTo = effectiveDate.plus({ days: 7 }).toISODate()!;
@@ -297,7 +297,7 @@ function makeValidPdf(): Buffer {
         timezone: 'America/Sao_Paulo',
         effectiveFrom,
         effectiveTo,
-        weeklyRules: [{ weekday: effectiveDate.weekday, windows: [{ start: '10:00', end: '11:00', durationMinutes: 30, capacity: 2 }] }],
+        windows: [{ start: '10:00', end: '11:00', durationMinutes: 30, capacity: 2 }],
       }),
     });
     expect(configured.status).toBe(201);
