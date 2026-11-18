@@ -734,7 +734,8 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const databaseError = error as { code?: string; constraint?: string };
   console.error('API request failed', { message: error instanceof Error ? error.message : 'unknown error', code: databaseError.code, constraint: databaseError.constraint });
   if (process.env.NODE_ENV === 'development') console.error(error instanceof Error ? error.stack : error);
-  return res.status(500).json({ error: 'Erro interno' });
+  const detail = process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'unknown error') : undefined;
+  return res.status(500).json({ error: 'Erro interno', ...(detail ? { detail } : {}) });
 });
 export function closeDocumentStorage(): void { documentStorage.close(); }
 export default app;
