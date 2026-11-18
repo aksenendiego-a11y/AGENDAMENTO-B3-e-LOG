@@ -57,11 +57,12 @@ type WindowRule = { start: string; end: string; durationMinutes: number; capacit
 type DayWindow = WindowRule & { weekday: number };
 
 let bearer = '';
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://agendamento-b3-e-log-1.onrender.com';
 async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const response = await fetch(url, { ...init, headers });
+  const response = await fetch(`${API_BASE}${url}`, { ...init, headers });
   if (response.status === 401) { bearer = ''; window.dispatchEvent(new Event('sad-session-expired')); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -99,7 +100,7 @@ async function downloadBookingDocument(booking: { id: string; protocol: string; 
       const popup = window.open('about:blank', '_blank');
       if (popup) popup.opener = null;
       try {
-        const res = await fetch(`/api/v1/documents/${doc.id}/download`, { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
+        const res = await fetch(`${API_BASE}/api/v1/documents/${doc.id}/download`, { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
         if (!res.ok) throw new Error('Não foi possível carregar o PDF.');
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -132,7 +133,7 @@ async function downloadBookingDocument(booking: { id: string; protocol: string; 
 
   // Tenta endpoint do backend
   try {
-    const res = await fetch(`/api/v1/bookings/${booking.id}/documents/download/${type}`, { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
+    const res = await fetch(`${API_BASE}/api/v1/bookings/${booking.id}/documents/download/${type}`, { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
     if (res.ok) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
