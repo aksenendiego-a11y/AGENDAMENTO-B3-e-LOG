@@ -28,9 +28,9 @@ if (!Number.isSafeInteger(configuredMaxDocumentBytes) || configuredMaxDocumentBy
 const maxDocumentBytes = configuredMaxDocumentBytes;
 const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: maxDocumentBytes, files: 1 } });
 const app = express();
+app.use(cors({ origin: 'https://aksenendiego-a11y.github.io' }));
 app.disable('x-powered-by');
 app.use(express.json({ limit: '128kb' }));
-app.use(cors({ origin: 'https://aksenendiego-a11y.github.io' }));
 app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' https://agendamento-b3-e-log-1.onrender.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"); next(); });
 
 async function auth(req: Request, res: Response, next: NextFunction) {
