@@ -146,10 +146,16 @@ app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, r
     await client.query('BEGIN');
     await client.query("SELECT id FROM schedule_slots WHERE local_date >= $1 OR (config_id IS NULL AND starts_at >= (($1::date)::timestamp AT TIME ZONE $2)) ORDER BY id FOR UPDATE", [input.data.effectiveFrom, input.data.timezone]);
     const latest = await client.query('SELECT max(effective_from) AS effective_from FROM schedule_configs');
-    if (latest.rows[0].effective_from && input.data.effectiveFrom <= DateTime.fromJSDate(new Date(latest.rows[0].effective_from)).toISODate()!) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Uma nova versão deve ter vigência posterior à configuração mais recente' }); }
+    if (latest.rows[0].effective_from && input.data.effectiveFrom < DateTime.fromJSDate(new Date(latest.rows[0].effective_from)).toISODate()!) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'A vigência deve iniciar na mesma data ou após a configuração mais recente' }); }
     const existing = await client.query("SELECT 1 FROM bookings b JOIN schedule_slots s ON s.id=b.slot_id WHERE b.status='confirmed' AND (s.local_date >= $1 OR s.starts_at >= (($1::date)::timestamp AT TIME ZONE $2)) LIMIT 1", [input.data.effectiveFrom, input.data.timezone]);
     if (existing.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Há reservas confirmadas a partir da vigência. Escolha uma data posterior à última reserva.' }); }
-    const result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,end_date,windows,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,timezone,effective_from,end_date,windows,created_at', [input.data.timezone, input.data.effectiveFrom, input.data.effectiveTo, JSON.stringify(input.data.windows), req.session!.sub]);
+    const previous = await client.query('SELECT id FROM schedule_configs WHERE effective_from = $1 ORDER BY created_at DESC LIMIT 1', [input.data.effectiveFrom]);
+    let result;
+    if (previous.rowCount) {
+      result = await client.query('UPDATE schedule_configs SET timezone=$1, end_date=$2, windows=$3, created_by=$4 WHERE id=$5 RETURNING id,timezone,effective_from,end_date,windows,created_at', [input.data.timezone, input.data.effectiveTo, JSON.stringify(input.data.windows), req.session!.sub, previous.rows[0].id]);
+    } else {
+      result = await client.query('INSERT INTO schedule_configs(timezone,effective_from,end_date,windows,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,timezone,effective_from,end_date,windows,created_at', [input.data.timezone, input.data.effectiveFrom, input.data.effectiveTo, JSON.stringify(input.data.windows), req.session!.sub]);
+    }
     await audit(req.session!.sub, 'calendar.configuration.created', 'schedule_config', result.rows[0].id, { effectiveFrom: input.data.effectiveFrom, effectiveTo: input.data.effectiveTo }, client);
     await client.query('COMMIT');
     return res.status(201).json({ configuration: result.rows[0] });
