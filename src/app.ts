@@ -130,6 +130,24 @@ app.get('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (_req, r
   const result = await pool.query('SELECT id,timezone,effective_from,end_date,windows,created_at FROM schedule_configs ORDER BY effective_from DESC');
   return res.json({ configurations: result.rows });
 }));
+app.delete('/api/v1/admin/calendar/configs/:id', auth, admin, asyncRoute(async (req, res) => {
+  if (!z.string().uuid().safeParse(req.params.id).success) return res.status(400).json({ error: 'Identificador inválido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT id,effective_from FROM schedule_configs WHERE id=$1 FOR UPDATE', [req.params.id]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Configuração não encontrada' }); }
+    const booked = await client.query("SELECT 1 FROM bookings b JOIN schedule_slots s ON s.id=b.slot_id WHERE s.config_id=$1 AND b.status='confirmed' LIMIT 1", [found.rows[0].id]);
+    if (booked.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Esta configuração ainda tem reservas confirmadas; não pode ser removida.' }); }
+    await client.query('DELETE FROM schedule_exceptions WHERE config_id=$1', [found.rows[0].id]);
+    await client.query('DELETE FROM schedule_slots WHERE config_id=$1', [found.rows[0].id]);
+    await client.query('DELETE FROM schedule_configs WHERE id=$1', [found.rows[0].id]);
+    await audit(req.session!.sub, 'calendar.configuration.deleted', 'schedule_config', found.rows[0].id, { effectiveFrom: found.rows[0].effective_from }, client);
+    await client.query('COMMIT');
+    return res.json({ ok: true, deleted: found.rows[0].id });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}));
 
 app.post('/api/v1/admin/calendar/configs', auth, admin, asyncRoute(async (req, res) => {
   const windowSchema = z.object({ start: z.string(), end: z.string(), durationMinutes: z.number().int().positive().max(1440), capacity: z.number().int().positive() });
