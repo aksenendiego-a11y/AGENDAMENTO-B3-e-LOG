@@ -1380,6 +1380,14 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
     setWindows(v => [...v, { start: String(f.get('start')), end: String(f.get('end')), durationMinutes: Number(f.get('durationMinutes')), capacity: Number(f.get('capacity')) }]);
     formElement.reset();
   };
+  const deleteConfig = async (id: string) => {
+    if (!window.confirm('Remover esta configuração da agenda? Os horários gerados por ela serão removidos.')) return;
+    try {
+      await api(`/api/v1/admin/calendar/configs/${id}`, { method: 'DELETE' });
+      await loadConfigs();
+      onNotice('Configuração da agenda removida.');
+    } catch (e) { onError((e as Error).message); }
+  };
   const saveCalendar = async () => {
     if (windows.length === 0) {
       onError('Adicione pelo menos uma faixa de horário antes de publicar a agenda.');
@@ -1580,7 +1588,7 @@ function Admin({ section, onNavigate, onError, onNotice }: { section: string; on
             </form>
           </Panel>
           <Panel title="Configurações publicadas">
-            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente de {String(configuration.effective_from ?? '').slice(0, 10)} a {String(configuration.end_date ?? '').slice(0, 10)}</span></summary><pre>{JSON.stringify(configuration.windows, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
+            {configs.length ? <div className="published-config-list">{configs.map((configuration, index) => <details key={String(configuration.id ?? index)}><summary><strong>{String(configuration.timezone ?? 'Fuso não informado')}</strong><span>Vigente de {String(configuration.effective_from ?? '').slice(0, 10)} a {String(configuration.end_date ?? '').slice(0, 10)}</span><button className="danger-link" onClick={() => void deleteConfig(String(configuration.id ?? ''))}>Remover</button></summary><pre>{JSON.stringify(configuration.windows, null, 2)}</pre></details>)}</div> : <p className="muted">Agenda indisponível até a primeira configuração. Adicione as faixas de atendimento para liberar horários.</p>}
           </Panel>
         </div>
       )}
